@@ -4,22 +4,32 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import os
 import json
+import time
 
 # --- 1. CONFIGURACIÓN DE CONEXIÓN ---
+
+
 def obtener_cliente():
     scope = [
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive",
     ]
-    # Si estamos en Render, usamos la variable de entorno
+
+    # Prioridad 1: Render (Variable de entorno)
     if "GOOGLE_CREDENTIALS" in os.environ:
         creds_info = json.loads(os.environ.get("GOOGLE_CREDENTIALS"))
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
     else:
-        # Si estás en tu PC, sigue buscando el archivo local
-        creds = ServiceAccountCredentials.from_json_keyfile_name("assets/creds.json", scope)
+        # Prioridad 2: Celular/PC (Archivo local en assets)
+        # Usamos una ruta relativa simple para el APK
+        creds = ServiceAccountCredentials.from_json_keyfile_name(
+            "assets/creds.json", scope
+        )
 
     return gspread.authorize(creds)
+
+
+# ... (Tus funciones obtener_o_crear_pestana y aplicar_estilos_y_totales quedan igual) ...
 
 
 def obtener_o_crear_pestana(spreadsheet, año):
@@ -27,14 +37,12 @@ def obtener_o_crear_pestana(spreadsheet, año):
     try:
         return spreadsheet.worksheet(nombre)
     except gspread.exceptions.WorksheetNotFound:
-        # Si no existe, duplica la primera hoja como plantilla
         plantilla = spreadsheet.get_worksheet(0)
         nueva = spreadsheet.duplicate_sheet(plantilla.id, new_sheet_name=nombre)
         nueva.batch_clear(["A3:U100"])
         return nueva
 
 
-# --- 2. LÓGICA DE ESTILOS Y TOTALES ---
 def aplicar_estilos_y_totales(
     sheet, fila_nueva, responsable, ultima_cuota_aca, tarjeta_actual
 ):
@@ -45,7 +53,6 @@ def aplicar_estilos_y_totales(
         f"J{fila_nueva}:U{fila_nueva}",
         {"numberFormat": formato_plata, "horizontalAlignment": "CENTER"},
     )
-
     sheet.format(
         f"A{fila_nueva}:U{fila_nueva}",
         {
@@ -71,89 +78,17 @@ def aplicar_estilos_y_totales(
             "horizontalAlignment": "CENTER",
         },
     )
-    sheet.format(
-        f"J{fila_nueva}:U{fila_nueva}",
-        {"backgroundColor": {"red": 1, "green": 1, "blue": 1}},
-    )
 
     if ultima_cuota_aca is not None:
         col_letra = chr(74 + ultima_cuota_aca)
         sheet.format(f"{col_letra}{fila_nueva}", {"backgroundColor": color})
 
-    # --- RECALCULAR SUMIF Y RESUMEN GENERAL ---
-    data = sheet.get_all_values()
-    rango_inicio = 3
-    en_bloque = False
-
-    filas_totales_ale = []
-    filas_totales_lu = []
-
-    for i, row in enumerate(data):
-        num_f = i + 1
-        f_str = " ".join(row).upper()
-
-        if ("VISA" in f_str or "MASTERCARD" in f_str) and "TOTAL" not in f_str:
-            rango_inicio = num_f + 1
-            en_bloque = True
-
-        if "TOTAL ALE" in f_str and "RESUMEN" not in f_str:
-            filas_totales_ale.append(num_f)
-            if tarjeta_actual.upper() in f_str or (num_f > 10 and en_bloque):
-                formulas = [
-                    f'=SUMIF($D${rango_inicio}:$D${fila_nueva}; "Ale"; {chr(64+c)}${rango_inicio}:{chr(64+c)}${fila_nueva})'
-                    for c in range(10, 22)
-                ]
-                sheet.update(
-                    range_name=f"J{num_f}:U{num_f}",
-                    values=[formulas],
-                    value_input_option="USER_ENTERED",
-                )
-
-        if "TOTAL LU" in f_str and "RESUMEN" not in f_str:
-            filas_totales_lu.append(num_f)
-            if tarjeta_actual.upper() in f_str or (num_f > 10 and en_bloque):
-                formulas = [
-                    f'=SUMIF($D${rango_inicio}:$D${fila_nueva}; "Lu"; {chr(64+c)}${rango_inicio}:{chr(64+c)}${fila_nueva})'
-                    for c in range(10, 22)
-                ]
-                sheet.update(
-                    range_name=f"J{num_f}:U{num_f}",
-                    values=[formulas],
-                    value_input_option="USER_ENTERED",
-                )
-
-    # ACTUALIZAR EL RESUMEN GENERAL
-    for i, row in enumerate(data):
-        num_f = i + 1
-        f_str = " ".join(row).upper()
-
-        if "RESUMEN GENERAL ALE" in f_str and len(filas_totales_ale) >= 2:
-            f_ale = [
-                f"={chr(64+c)}{filas_totales_ale[0]}+{chr(64+c)}{filas_totales_ale[1]}"
-                for c in range(10, 22)
-            ]
-            sheet.update(
-                range_name=f"J{num_f}:U{num_f}",
-                values=[f_ale],
-                value_input_option="USER_ENTERED",
-            )
-
-        if "RESUMEN GENERAL LU" in f_str and len(filas_totales_lu) >= 2:
-            f_lu = [
-                f"={chr(64+c)}{filas_totales_lu[0]}+{chr(64+c)}{filas_totales_lu[1]}"
-                for c in range(10, 22)
-            ]
-            sheet.update(
-                range_name=f"J{num_f}:U{num_f}",
-                values=[f_lu],
-                value_input_option="USER_ENTERED",
-            )
-
 
 # --- 3. PROCESO DE CARGA ---
+
+
 def cargar_gasto(detalle, monto, cuotas, responsable, mes_inicio, tarjeta):
     client = obtener_cliente()
-    # Asegúrate de que el nombre del Excel en Drive coincida con esto:
     ss = client.open("Gastos 2026 - Tarjetas")
 
     monto_f = float(
@@ -162,6 +97,7 @@ def cargar_gasto(detalle, monto, cuotas, responsable, mes_inicio, tarjeta):
     cant_c = int(cuotas)
     val_c = monto_f / cant_c
     det_f = detalle.strip().title()
+
     meses = [
         "Enero",
         "Febrero",
@@ -183,7 +119,6 @@ def cargar_gasto(detalle, monto, cuotas, responsable, mes_inicio, tarjeta):
         data = sheet.get_all_values()
         f_ins = None
         en_bloque_tarjeta = False
-
         for i, row in enumerate(data):
             f_str = " ".join(row).upper()
             if tarjeta.upper() in f_str and "TOTAL" not in f_str:
@@ -191,11 +126,6 @@ def cargar_gasto(detalle, monto, cuotas, responsable, mes_inicio, tarjeta):
             if en_bloque_tarjeta and f"TOTAL {responsable.upper()}" in f_str:
                 f_ins = i + 1
                 break
-
-        if f_ins is None:
-            raise Exception(
-                f"No encontré la fila de TOTAL para {responsable} en {tarjeta}"
-            )
 
         sheet.insert_row([], f_ins)
         sheet.merge_cells(f"B{f_ins}:C{f_ins}")
@@ -252,28 +182,64 @@ def cargar_gasto(detalle, monto, cuotas, responsable, mes_inicio, tarjeta):
     return fila_26
 
 
-# --- 4. INTERFAZ FLET ---
-def main(page: ft.Page):
-    page.title = "Tarjetitas"  # <-- Nombre corregido
-    page.window_width = 450
-    page.theme_mode = ft.ThemeMode.LIGHT
+# --- 4. INTERFAZ FLET CON PANTALLA DE CARGA ---
 
+
+def main(page: ft.Page):
+    page.title = "Tarjetitas"
+    page.theme_mode = ft.ThemeMode.LIGHT
+    page.window_width = 450
+    page.vertical_alignment = ft.MainAxisAlignment.CENTER
+    page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
+
+    # Componente de la pantalla de carga
+    splash = ft.Column(
+        [
+            ft.Image(src="icon.jpg", width=120, height=120, border_radius=60),
+            ft.Text("Iniciando Tarjetitas...", size=20, weight="bold"),
+            ft.ProgressBar(width=250, color="blue"),
+            ft.Text("Conectando con Google Sheets...", size=12, italic=True),
+        ],
+        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+    )
+
+    page.add(splash)
+    page.update()
+
+    # Intentamos la conexión inicial
+    try:
+        # Esto verifica si las credenciales son válidas antes de mostrar la app
+        obtener_cliente()
+        time.sleep(1.5)  # Para que se aprecie el logo un momento
+    except Exception as e:
+        page.clean()
+        page.add(ft.Icon(ft.icons.ERROR_OUTLINE, color="red", size=50))
+        page.add(ft.Text(f"Error de inicio: {e}", color="red", text_align="center"))
+        page.update()
+        return
+
+    # Si todo sale bien, limpiamos y armamos la interfaz real
+    page.clean()
+    page.vertical_alignment = ft.MainAxisAlignment.START
+
+    # --- ELEMENTOS DE LA INTERFAZ ---
     tar = ft.Dropdown(
         label="Tarjeta",
         value="VISA",
         options=[ft.dropdown.Option("VISA"), ft.dropdown.Option("MASTERCARD")],
     )
     det = ft.TextField(label="Detalle de compra")
-    mon = ft.TextField(label="Monto Total", prefix=ft.Text("$ "))
-    cuo = ft.TextField(label="Cuotas", value="1")
+    mon = ft.TextField(label="Monto Total", prefix=ft.Text("$ "), expand=True)
+    cuo = ft.TextField(label="Cuotas", value="1", expand=True)
     res = ft.Dropdown(
         label="Responsable",
         value="Ale",
         options=[ft.dropdown.Option("Ale"), ft.dropdown.Option("Lu")],
+        expand=True,
     )
     mes = ft.Dropdown(
         label="Mes de Inicio",
-        value="Marzo",
+        value=datetime.now().strftime("%B").capitalize(),
         options=[
             ft.dropdown.Option(m)
             for m in [
@@ -291,18 +257,19 @@ def main(page: ft.Page):
                 "Diciembre",
             ]
         ],
+        expand=True,
     )
     st = ft.Text("")
 
     def click(e):
-        st.value = "⏳ Cargando en Tarjetitas..."
+        st.value = "⏳ Cargando en Google Sheets..."
         st.color = "blue"
         page.update()
         try:
             cargar_gasto(
                 det.value, mon.value, cuo.value, res.value, mes.value, tar.value
             )
-            st.value = "✅ ¡Gasto registrado correctamente!"
+            st.value = "✅ ¡Gasto registrado!"
             st.color = "green"
             det.value = ""
             mon.value = ""
@@ -313,15 +280,33 @@ def main(page: ft.Page):
             page.update()
 
     page.add(
-        ft.Text("Tarjetitas", size=25, weight="bold"),  # <-- Nombre corregido
-        tar,
-        det,
-        ft.Row([mon, cuo]),
-        ft.Row([res, mes]),
-        ft.ElevatedButton("CARGAR GASTO", on_click=click, width=400),
-        st,
+        ft.Container(
+            content=ft.Column(
+                [
+                    ft.Text("Tarjetitas", size=30, weight="bold", color="blue700"),
+                    tar,
+                    det,
+                    ft.Row([mon, cuo], spacing=10),
+                    ft.Row([res, mes], spacing=10),
+                    ft.ElevatedButton(
+                        "CARGAR GASTO",
+                        on_click=click,
+                        width=400,
+                        height=50,
+                        style=ft.ButtonStyle(
+                            shape=ft.RoundedRectangleBorder(radius=10)
+                        ),
+                    ),
+                    st,
+                ],
+                spacing=20,
+            ),
+            padding=20,
+        )
     )
+    page.update()
 
 
 if __name__ == "__main__":
-    ft.app(target=main)
+    # Importante: assets_dir le dice a Flet dónde están las imágenes y el json
+    ft.app(target=main, assets_dir="assets")

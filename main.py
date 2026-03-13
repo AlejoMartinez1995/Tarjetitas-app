@@ -5,7 +5,11 @@ from oauth2client.service_account import ServiceAccountCredentials
 import os
 import json
 import time
-
+import sys
+# Creamos un módulo falso de wsgiref para que gspread no se queje
+from types import ModuleType
+sys.modules["wsgiref"] = ModuleType("wsgiref")
+sys.modules["wsgiref.simple_server"] = ModuleType("simple_server")
 # --- 1. CONFIGURACIÓN DE CONEXIÓN ---
 
 

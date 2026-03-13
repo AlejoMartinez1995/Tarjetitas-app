@@ -1,4 +1,4 @@
 flet
 gspread
+google-auth
 oauth2client
-google-auth-oauthlib

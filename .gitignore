@@ -1,4 +1,7 @@
 development/
 build/
+.dart_tool/
 creds.json
-*.tar.xz
+assets/creds.json
+__pycache__/
+*.pyc

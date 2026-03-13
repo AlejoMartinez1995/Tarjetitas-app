@@ -1,46 +1,38 @@
 import flet as ft
 from datetime import datetime
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+# Usamos estas librerías que NO piden wsgiref
+from google.oauth2.service_account import Credentials 
 import os
 import json
 import time
-import sys
-# Creamos un módulo falso de wsgiref para que gspread no se queje
-from types import ModuleType
-sys.modules["wsgiref"] = ModuleType("wsgiref")
-sys.modules["wsgiref.simple_server"] = ModuleType("simple_server")
+
 # --- 1. CONFIGURACIÓN DE CONEXIÓN ---
 
-
-# Reemplazá tu función obtener_cliente por esta:
 def obtener_cliente():
+    # Definimos los permisos necesarios
     scope = [
-        "https://spreadsheets.google.com/feeds",
+        "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive",
     ]
 
+    # Prioridad 1: Render (Variable de entorno para la web)
     if "GOOGLE_CREDENTIALS" in os.environ:
         creds_info = json.loads(os.environ.get("GOOGLE_CREDENTIALS"))
-        return gspread.authorize(
-            ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
-        )
+        creds = Credentials.from_service_account_info(creds_info, scopes=scope)
+        return gspread.authorize(creds)
 
-    # Intentar rutas comunes para el celular y PC
+    # Prioridad 2: Celular/PC (Archivo local en assets)
+    # IMPORTANTE: En Android la ruta debe ser exacta
     rutas_posibles = ["assets/creds.json", "creds.json"]
     for ruta in rutas_posibles:
         if os.path.exists(ruta):
-            return gspread.authorize(
-                ServiceAccountCredentials.from_json_keyfile_name(ruta, scope)
-            )
+            creds = Credentials.from_service_account_file(ruta, scopes=scope)
+            return gspread.authorize(creds)
 
-    raise FileNotFoundError(
-        "No se encontró el archivo creds.json en ninguna ruta conocida."
-    )
+    raise FileNotFoundError("No se encontró el archivo creds.json")
 
-
-# ... (Tus funciones obtener_o_crear_pestana y aplicar_estilos_y_totales quedan igual) ...
-
+# ... (El resto de tus funciones cargar_gasto, aplicar_estilos, etc. se mantienen)
 
 def obtener_o_crear_pestana(spreadsheet, año):
     nombre = f"Gastos {año}"

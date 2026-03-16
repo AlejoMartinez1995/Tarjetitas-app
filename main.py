@@ -1,6 +1,5 @@
 import flet as ft
 from datetime import datetime
-import gspread
 import os
 import json
 import time
@@ -8,28 +7,24 @@ import time
 # --- 1. CONFIGURACIÓN DE CONEXIÓN ---
 
 
-def obtener_cliente():
-    # El scope necesario para Sheets y Drive
-    scope = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive",
-    ]
+import gspread
+from gspread import service_account # Importación directa para evitar ruido
 
-    # Prioridad 1: Render o Entornos con variables de sistema
+def obtener_cliente():
+    # En Android, el archivo suele quedar en la raíz de la app
+    ruta_creds = "creds.json" 
+    
+    if os.path.exists(ruta_creds):
+        # Usamos la función importada directamente
+        return service_account(filename=ruta_creds)
+    
+    # Si falla, buscamos en variables (como tenías para Render)
     if "GOOGLE_CREDENTIALS" in os.environ:
+        import json
         creds_info = json.loads(os.environ.get("GOOGLE_CREDENTIALS"))
-        # Usamos service_account_from_dict que es más seguro para evitar wsgiref
         return gspread.service_account_from_dict(creds_info)
 
-    # Prioridad 2: Celular/PC (Archivo local)
-    # Importante: Asegurate de que tu archivo se llame exatamente 'creds.json'
-    rutas_posibles = ["creds.json", "assets/creds.json"]
-    for ruta in rutas_posibles:
-        if os.path.exists(ruta):
-            # Este es el método que NO usa wsgiref
-            return gspread.service_account(filename=ruta)
-
-    raise FileNotFoundError("No se encontró el archivo creds.json en el proyecto.")
+    raise FileNotFoundError("No se encontró creds.json")
 
 
 # --- 2. FUNCIONES DE GOOGLE SHEETS ---

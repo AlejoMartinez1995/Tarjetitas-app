@@ -3,16 +3,13 @@ from datetime import datetime
 import os
 import sys
 from types import ModuleType
-import gspread
 
-# --- 1. MOCK REFORZADO PARA ANDROID/WEB ---
-# Este bloque engaña a gspread para que no busque la librería 'wsgiref' que falta en el celular.
+# --- 1. MOCK REFORZADO PARA ANDROID (Soluciona ModuleNotFoundError: 'wsgiref') ---
 if "wsgiref" not in sys.modules:
     mock_wsgiref = ModuleType("wsgiref")
     mock_ss = ModuleType("simple_server")
     mock_util = ModuleType("util")
 
-    # Creamos clases vacías para que no den error al ser llamadas
     class MockHandler:
         pass
 
@@ -22,14 +19,14 @@ if "wsgiref" not in sys.modules:
     mock_ss.WSGIRequestHandler = MockHandler
     mock_ss.make_server = lambda *args, **kwargs: MockServer()
 
-    # Inyectamos los sub-módulos en el sistema
     sys.modules["wsgiref"] = mock_wsgiref
     sys.modules["wsgiref.simple_server"] = mock_ss
     sys.modules["wsgiref.util"] = mock_util
 
-    # Vinculamos los nombres para que gspread los encuentre
     mock_wsgiref.simple_server = mock_ss
     mock_wsgiref.util = mock_util
+
+import gspread
 
 
 # --- 2. CONEXIÓN ---
@@ -48,7 +45,7 @@ def obtener_cliente():
     raise FileNotFoundError("No se encontró creds.json.")
 
 
-# --- 3. LÓGICA DE FORMATO Y TOTALES ---
+# --- 3. LÓGICA DE FORMATO, BORDES Y TOTALES (Batch para evitar Error 429) ---
 def formatear_y_totalizar(sheet, tarjeta):
     data = sheet.get_all_values()
     inicio_bloque = None
@@ -69,20 +66,46 @@ def formatear_y_totalizar(sheet, tarjeta):
         return
 
     requests = []
+    # Formato de moneda y alineación para las columnas de meses (J a U)
+    requests.append(
+        {
+            "repeatCell": {
+                "range": {
+                    "sheetId": sheet.id,
+                    "startRowIndex": inicio_bloque - 1,
+                    "endRowIndex": fila_total_lu,
+                    "startColumnIndex": 9,
+                    "endColumnIndex": 21,
+                },
+                "cell": {
+                    "userEnteredFormat": {
+                        "numberFormat": {"type": "CURRENCY", "pattern": '"$" #,##0.00'},
+                        "horizontalAlignment": "CENTER",
+                    }
+                },
+                "fields": "userEnteredFormat(numberFormat,horizontalAlignment)",
+            }
+        }
+    )
+
     for r in range(inicio_bloque, fila_total_lu + 1):
         idx = r - 1
         row_data = data[idx] if idx < len(data) else []
         responsable = row_data[3] if len(row_data) > 3 else ""
         detalle = row_data[1] if len(row_data) > 1 else ""
 
+        # Colores según responsable
         color = {"red": 1, "green": 1, "blue": 1}
         if "Ale" in responsable:
             color = {"red": 0.85, "green": 0.92, "blue": 0.83}
         elif "Lu" in responsable:
             color = {"red": 0.82, "green": 0.88, "blue": 1.0}
-        elif "TOTAL" in detalle.upper():
+        elif "TOTAL" in detalle.upper() or (
+            len(row_data) > 0 and "TOTAL" in row_data[0].upper()
+        ):
             color = {"red": 0.95, "green": 0.95, "blue": 0.95}
 
+        # Bordes compatibles con API (sin innerHorizontal)
         requests.append(
             {
                 "repeatCell": {
@@ -129,6 +152,7 @@ def formatear_y_totalizar(sheet, tarjeta):
     if requests:
         sheet.spreadsheet.batch_update({"requests": requests})
 
+    # Fórmulas de Totales
     celdas_formulas = []
     for col_idx in range(10, 22):
         letra = chr(64 + col_idx)
@@ -217,39 +241,42 @@ def cargar_gasto(detalle, monto, cuotas, responsable, mes_inicio, tarjeta):
         procesar_hoja(2027, quedan, 0)
 
 
-# --- 5. INTERFAZ ---
+# --- 5. INTERFAZ FLET ---
 def main(page: ft.Page):
     page.title = "Tarjetita 2.0"
     page.theme_mode = ft.ThemeMode.LIGHT
     page.window_width = 450
     page.scroll = ft.ScrollMode.ADAPTIVE
+    page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
+
     st = ft.Text("Listo para cargar", weight="bold")
     tar = ft.Dropdown(
         label="Tarjeta",
         value="VISA",
         options=[ft.dropdown.Option("VISA"), ft.dropdown.Option("MASTERCARD")],
-        expand=True,
+        width=400,
     )
     det = ft.TextField(
         label="Detalle de compra",
-        expand=True,
+        width=400,
         text_capitalization=ft.TextCapitalization.SENTENCES,
     )
     mon = ft.TextField(
         label="Monto Total",
         keyboard_type=ft.KeyboardType.NUMBER,
-        expand=2,
-        prefix_text="$",
+        prefix_text="$ ",
+        width=290,
     )
     cuo = ft.TextField(
-        label="Cuotas", value="1", keyboard_type=ft.KeyboardType.NUMBER, width=80
+        label="Cuotas", value="1", keyboard_type=ft.KeyboardType.NUMBER, width=100
     )
     res = ft.Dropdown(
         label="Responsable",
         value="Ale",
         options=[ft.dropdown.Option("Ale"), ft.dropdown.Option("Lu")],
-        expand=1,
+        width=190,
     )
+
     meses_l = [
         "Enero",
         "Febrero",
@@ -268,20 +295,23 @@ def main(page: ft.Page):
         label="Mes Inicio",
         value=meses_l[datetime.now().month - 1],
         options=[ft.dropdown.Option(m) for m in meses_l],
-        expand=2,
+        width=200,
     )
 
     def click(e):
         if not det.value or not mon.value:
+            st.value = "❌ Falta detalle o monto"
+            st.color = "red"
+            page.update()
             return
-        st.value = "⏳ Procesando... No cierres la app"
+        st.value = "⏳ Procesando..."
         st.color = "blue"
         page.update()
         try:
             cargar_gasto(
                 det.value, mon.value, cuo.value, res.value, mes.value, tar.value
             )
-            st.value = "✅ ¡Cargado!"
+            st.value = "✅ ¡Gasto cargado!"
             st.color = "green"
             det.value = ""
             mon.value = ""
@@ -296,16 +326,21 @@ def main(page: ft.Page):
             content=ft.Column(
                 [
                     ft.Text("Tarjetita", size=32, weight="bold", color="blue700"),
-                    ft.Row([tar]),
-                    ft.Row([det]),
-                    ft.Row([mon, cuo]),
-                    ft.Row([res, mes]),
+                    tar,
+                    det,
+                    ft.Row(
+                        [mon, cuo], alignment=ft.MainAxisAlignment.CENTER, width=400
+                    ),
+                    ft.Row(
+                        [res, mes], alignment=ft.MainAxisAlignment.CENTER, width=400
+                    ),
                     ft.ElevatedButton(
-                        "CARGAR GASTO", on_click=click, width=page.width, height=50
+                        "CARGAR GASTO", on_click=click, width=400, height=60
                     ),
                     st,
                 ],
-                spacing=15,
+                spacing=20,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             ),
             padding=20,
         )
@@ -314,4 +349,3 @@ def main(page: ft.Page):
 
 if __name__ == "__main__":
     ft.app(target=main)
-

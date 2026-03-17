@@ -27,7 +27,6 @@ import gspread
 
 
 def obtener_cliente():
-    # Priorizamos rutas relativas que funcionan mejor en el APK
     posibles_rutas = [
         "creds.json",
         "assets/creds.json",
@@ -191,7 +190,6 @@ def main(page: ft.Page):
 
     st = ft.Text("Listo para cargar", weight="bold")
 
-    # Definición de inputs
     tar = ft.Dropdown(
         label="Tarjeta",
         value="VISA",
@@ -199,10 +197,12 @@ def main(page: ft.Page):
     )
     det = ft.TextField(
         label="Detalle de compra",
-        capitalization=ft.TextCapitalization.WORDS,  # <--- 'capitalization' es el nombre nuevo
+        capitalization=ft.TextCapitalization.WORDS,
     )
     mon = ft.TextField(
-        label="Monto Total", prefix_text="$ ", keyboard_type=ft.KeyboardType.NUMBER
+        label="Monto Total",
+        prefix=ft.Text("$ "),  # <--- Corregido: Ahora usa 'prefix' y el control ft.Text
+        keyboard_type=ft.KeyboardType.NUMBER,
     )
     cuo = ft.TextField(label="Cuotas", value="1", keyboard_type=ft.KeyboardType.NUMBER)
     res = ft.Dropdown(

@@ -6,23 +6,17 @@ from types import ModuleType
 
 # --- TRUCO NIVEL DIOS: Mock completo para engañar a la herencia de clases ---
 if "wsgiref" not in sys.modules:
-    # Creamos la estructura de carpetas falsa
     mock_wsgiref = ModuleType("wsgiref")
     mock_ss = ModuleType("simple_server")
     mock_util = ModuleType("util")
-    
-    # Creamos una clase vacía para que la herencia no explote
-    class MockHandler: 
+
+    class MockHandler:
         pass
 
-    # Metemos la clase adentro del simple_server falso
     mock_ss.WSGIRequestHandler = MockHandler
-    
-    # Conectamos todo
     mock_wsgiref.simple_server = mock_ss
     mock_wsgiref.util = mock_util
-    
-    # Registramos en el sistema
+
     sys.modules["wsgiref"] = mock_wsgiref
     sys.modules["wsgiref.simple_server"] = mock_ss
     sys.modules["wsgiref.util"] = mock_util
@@ -33,12 +27,11 @@ import gspread
 
 
 def obtener_cliente():
-    # Lista de posibles ubicaciones del archivo JSON en Android y PC
+    # Priorizamos rutas relativas que funcionan mejor en el APK
     posibles_rutas = [
-        "creds.json",  # Raíz del proyecto
-        "assets/creds.json",  # Carpeta assets
+        "creds.json",
+        "assets/creds.json",
         os.path.join(os.getcwd(), "creds.json"),
-        os.path.join(os.path.dirname(__file__), "creds.json"),
     ]
 
     for ruta in posibles_rutas:
@@ -46,10 +39,11 @@ def obtener_cliente():
             try:
                 return gspread.service_account(filename=ruta)
             except Exception as e:
-                print(f"Error cargando {ruta}: {e}")
+                print(f"Error en {ruta}: {e}")
 
-    # Si llega acá y no lo encontró, tira el error detallado
-    raise FileNotFoundError(f"No se encontró creds.json. Busqué en: {posibles_rutas}")
+    raise FileNotFoundError(
+        "No se encontró creds.json. Asegurate de incluirlo en el build."
+    )
 
 
 # --- 2. FUNCIONES DE GOOGLE SHEETS ---
@@ -60,7 +54,6 @@ def obtener_o_crear_pestana(spreadsheet, año):
     try:
         return spreadsheet.worksheet(nombre)
     except gspread.exceptions.WorksheetNotFound:
-        # Si no existe, duplica la primera hoja como plantilla
         plantilla = spreadsheet.get_worksheet(0)
         nueva = spreadsheet.duplicate_sheet(plantilla.id, new_sheet_name=nombre)
         nueva.batch_clear(["A3:U100"])
@@ -69,8 +62,6 @@ def obtener_o_crear_pestana(spreadsheet, año):
 
 def aplicar_estilos_y_totales(sheet, fila_nueva, responsable, ultima_cuota_aca):
     formato_plata = {"type": "CURRENCY", "pattern": '"$" #,##0.00'}
-
-    # Formatear columnas de montos y cuotas
     sheet.format(f"G{fila_nueva}", {"numberFormat": formato_plata})
     sheet.format(f"I{fila_nueva}", {"numberFormat": formato_plata})
     sheet.format(
@@ -78,7 +69,6 @@ def aplicar_estilos_y_totales(sheet, fila_nueva, responsable, ultima_cuota_aca):
         {"numberFormat": formato_plata, "horizontalAlignment": "CENTER"},
     )
 
-    # Colores según responsable (Verde para Ale, Azul para Lu)
     color = (
         {"red": 0.85, "green": 0.92, "blue": 0.83}
         if responsable == "Ale"
@@ -95,7 +85,7 @@ def aplicar_estilos_y_totales(sheet, fila_nueva, responsable, ultima_cuota_aca):
     )
 
     if ultima_cuota_aca is not None:
-        col_letra = chr(74 + ultima_cuota_aca)  # J=74 en ASCII
+        col_letra = chr(74 + ultima_cuota_aca)
         sheet.format(f"{col_letra}{fila_nueva}", {"backgroundColor": color})
 
 
@@ -104,7 +94,6 @@ def aplicar_estilos_y_totales(sheet, fila_nueva, responsable, ultima_cuota_aca):
 
 def cargar_gasto(detalle, monto, cuotas, responsable, mes_inicio, tarjeta):
     client = obtener_cliente()
-    # Asegurate de que el nombre coincida EXACTAMENTE con tu planilla
     ss = client.open("Gastos 2026 - Tarjetas")
 
     monto_f = float(
@@ -134,20 +123,18 @@ def cargar_gasto(detalle, monto, cuotas, responsable, mes_inicio, tarjeta):
         sheet = obtener_o_crear_pestana(ss, año_hoja)
         data = sheet.get_all_values()
         f_ins = None
-        en_bloque_tarjeta = False
+        en_bloque = False
 
-        # Buscar la fila donde insertar según la tarjeta y responsable
         for i, row in enumerate(data):
             f_str = " ".join(row).upper()
             if tarjeta.upper() in f_str and "TOTAL" not in f_str:
-                en_bloque_tarjeta = True
-            if en_bloque_tarjeta and f"TOTAL {responsable.upper()}" in f_str:
+                en_bloque = True
+            if en_bloque and f"TOTAL {responsable.upper()}" in f_str:
                 f_ins = i + 1
                 break
 
         if f_ins is None:
             f_ins = len(data) + 1
-
         sheet.insert_row([], f_ins)
 
         prefijo = str(año_hoja)[2:]
@@ -163,21 +150,19 @@ def cargar_gasto(detalle, monto, cuotas, responsable, mes_inicio, tarjeta):
             val_c,
         ]
 
-        # Lógica de distribución de cuotas en los meses (J a U)
-        ultima_idx_pintar = None
+        ultima_idx = None
         for i in range(12):
             if año_hoja == 2026:
                 if i >= idx_m and i < idx_m + cant_c:
                     fila_datos.append(f"=$I{f_ins}")
-                    ultima_idx_pintar = i
+                    ultima_idx = i
                 else:
                     fila_datos.append("")
-            else:  # Para el año siguiente (2027)
-                cuotas_ya_pagadas = 12 - idx_m
-                cuotas_restantes = cant_c - cuotas_ya_pagadas
-                if i < cuotas_restantes:
+            else:
+                restantes = cant_c - (12 - idx_m)
+                if i < restantes:
                     fila_datos.append(f"=$I{f_ins}")
-                    ultima_idx_pintar = i
+                    ultima_idx = i
                 else:
                     fila_datos.append("")
 
@@ -186,16 +171,13 @@ def cargar_gasto(detalle, monto, cuotas, responsable, mes_inicio, tarjeta):
             values=[fila_datos],
             value_input_option="USER_ENTERED",
         )
-
-        aplicar_estilos_y_totales(sheet, f_ins, responsable, ultima_idx_pintar)
+        aplicar_estilos_y_totales(sheet, f_ins, responsable, ultima_idx)
         return f_ins
 
-    fila_final = procesar_hoja(2026)
-    # Si las cuotas desbordan al año siguiente
+    f26 = procesar_hoja(2026)
     if idx_m + cant_c > 12:
         procesar_hoja(2027)
-
-    return fila_final
+    return f26
 
 
 # --- 4. INTERFAZ FLET ---
@@ -204,38 +186,12 @@ def cargar_gasto(detalle, monto, cuotas, responsable, mes_inicio, tarjeta):
 def main(page: ft.Page):
     page.title = "Tarjetita"
     page.theme_mode = ft.ThemeMode.LIGHT
-    page.window_width = 450
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
     page.scroll = ft.ScrollMode.ADAPTIVE
 
-    st = ft.Text("", weight="bold")
+    st = ft.Text("Listo para cargar", weight="bold")
 
-    def click(e):
-        if not det.value or not mon.value:
-            st.value = "❌ Completá detalle y monto"
-            st.color = "red"
-            page.update()
-            return
-
-        st.value = "⏳ Cargando en Google Sheets..."
-        st.color = "blue"
-        page.update()
-
-        try:
-            cargar_gasto(
-                det.value, mon.value, cuo.value, res.value, mes.value, tar.value
-            )
-            st.value = "✅ ¡Gasto registrado!"
-            st.color = "green"
-            det.value = ""
-            mon.value = ""
-            page.update()
-        except Exception as ex:
-            st.value = f"❌ Error: {str(ex)}"
-            st.color = "red"
-            page.update()
-
-    # Componentes de la UI
+    # Definición de inputs
     tar = ft.Dropdown(
         label="Tarjeta",
         value="VISA",
@@ -268,12 +224,35 @@ def main(page: ft.Page):
         "Noviembre",
         "Diciembre",
     ]
-
     mes = ft.Dropdown(
         label="Mes Inicio",
         value=meses_lista[datetime.now().month - 1],
         options=[ft.dropdown.Option(m) for m in meses_lista],
     )
+
+    def click(e):
+        if not det.value or not mon.value:
+            st.value = "❌ Completá detalle y monto"
+            st.color = "red"
+            page.update()
+            return
+
+        st.value = "⏳ Conectando con la planilla..."
+        st.color = "blue"
+        page.update()
+
+        try:
+            cargar_gasto(
+                det.value, mon.value, cuo.value, res.value, mes.value, tar.value
+            )
+            st.value = "✅ ¡Gasto registrado!"
+            st.color = "green"
+            det.value = ""
+            mon.value = ""
+        except Exception as ex:
+            st.value = f"❌ Error: {str(ex)}"
+            st.color = "red"
+        page.update()
 
     page.add(
         ft.Container(
@@ -285,13 +264,7 @@ def main(page: ft.Page):
                     ft.Row([mon, cuo], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                     ft.Row([res, mes], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                     ft.ElevatedButton(
-                        "CARGAR GASTO",
-                        on_click=click,
-                        width=400,
-                        height=60,
-                        style=ft.ButtonStyle(
-                            shape=ft.RoundedRectangleBorder(radius=10)
-                        ),
+                        "CARGAR GASTO", on_click=click, width=400, height=60
                     ),
                     st,
                 ],

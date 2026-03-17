@@ -4,13 +4,14 @@ import os
 import sys
 from types import ModuleType
 
-# --- TRUCO PARA ANDROID: Evitar error de wsgiref ---
-# Este bloque engaña a gspread haciéndole creer que wsgiref existe.
+# --- TRUCO DEFINITIVO ---
 if "wsgiref" not in sys.modules:
     mock_wsgiref = ModuleType("wsgiref")
     mock_wsgiref.simple_server = ModuleType("simple_server")
+    mock_wsgiref.util = ModuleType("util")  # Esta es la que te pedía el último error
     sys.modules["wsgiref"] = mock_wsgiref
     sys.modules["wsgiref.simple_server"] = mock_wsgiref.simple_server
+    sys.modules["wsgiref.util"] = mock_wsgiref.util
 
 import gspread
 

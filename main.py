@@ -290,7 +290,7 @@ def main(page: ft.Page):
         width=250,
     )
     cuo = ft.TextField(
-        label="Cuotas", value="1", keyboard_type=ft.KeyboardType.NUMBER, width=100
+        label="Cuotas", value="1", keyboard_type=ft.KeyboardType.NUMBER, width=50
     )
     res = ft.Dropdown(
         label="Responsable",
@@ -317,7 +317,7 @@ def main(page: ft.Page):
         label="Mes Inicio",
         value=meses_l[datetime.now().month - 1],
         options=[ft.dropdown.Option(m) for m in meses_l],
-        width=200,
+        width=150,
     )
 
     def click(e):

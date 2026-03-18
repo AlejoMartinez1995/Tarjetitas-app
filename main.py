@@ -252,7 +252,7 @@ def main(page: ft.Page):
     mon = ft.TextField(
         label="Monto Total",
         keyboard_type=ft.KeyboardType.NUMBER,
-        prefix_text="$ ",
+        prefix=ft.Text("$ "),
         width=290,
     )
     cuo = ft.TextField(

@@ -43,4 +43,8 @@ Si querés probar la aplicación de forma local en tu computadora, seguí estos 
    cd tarjetitas-app
    
 ### 📸 Vista previa de la aplicación
-![Dashboard principal](screenshots/tu-captura-dashboard.png)
+
+<p align="center">
+  <img src="Screenshots/dashboard.png" alt="Dashboard Principal" width="45%">
+  <img src="Screenshots/graficos.png" alt="Análisis de Gastos" width="45%">
+</p>

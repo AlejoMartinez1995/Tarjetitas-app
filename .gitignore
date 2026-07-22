@@ -5,3 +5,20 @@ creds.json
 assets/creds.json
 __pycache__/
 *.pyc
+
+# Entorno virtual de Python 
+venv/
+.venv/
+env/
+
+# Archivos de distribución y APKs compiladas
+dist/
+*.apk
+
+# Configuración de entorno local / Variables secretas
+.env
+
+# Archivos del sistema operativo y editores de código
+.DS_Store
+.vscode/
+.idea/

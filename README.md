@@ -39,24 +39,31 @@ Tarjetita/
 ```
 ---
 
-⚙️ Instalación y Configuración Local
+## ⚙️ Instalación y Configuración Local
 Si querés probar o desplegar la aplicación en tu entorno local, seguí estos pasos:
 
-1. Clonar el repositorio
+**1. Clonar el repositorio**
+
 Bash
 git clone [https://github.com/AlejoMartinez1995/Tarjetitas-app.git](https://github.com/AlejoMartinez1995/Tarjetitas-app.git)
 cd Tarjetitas-app
-2. Crear y activar un entorno virtual
+
+**2. Crear y activar un entorno virtual**
+
 Bash
 python -m venv venv
 # En Windows:
 venv\Scripts\activate
 # En Linux/Mac:
 source venv/bin/activate
-3. Instalar dependencias
+
+**3. Instalar dependencias**
+
 Bash
 pip install -r requirements.txt
-4. Configurar las Credenciales de Google Cloud
+
+**4. Configurar las Credenciales de Google Cloud**
+
 Para que la app pueda interactuar con Google Sheets:
 
 Creá un proyecto en Google Cloud Console.
@@ -69,10 +76,12 @@ Renombrá ese archivo a creds.json y colocalo en la raíz de este proyecto.
 
 (Opcional) En tu Google Drive personal, creá una carpeta compartida y dale permisos de Editor al email de tu Service Account.
 
-5. Ejecutar la aplicación
+**5. Ejecutar la aplicación**
+
 Bash
 python main.py
-📸 Vista previa de la aplicación
+
+## 📸 Vista previa de la aplicación
 <img width="610" height="1037" alt="WhatsApp Image 2026-07-22 at 7 46 54 AM (1)" src="https://github.com/user-attachments/assets/26511167-e89d-46dd-8c76-af4c5b5fe1c8" />
 <img width="610" height="1201" alt="WhatsApp Image 2026-07-22 at 7 46 54 AM" src="https://github.com/user-attachments/assets/40616e0f-44de-414e-84de-3a996481a5c7" />
 

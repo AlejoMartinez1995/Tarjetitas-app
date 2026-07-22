@@ -36,7 +36,7 @@ Tarjetita/
 ├── creds.example.json   # Plantilla de estructura para la Service Account de Google
 ├── .gitignore           # Exclusión de entornos virtuales, APKs compiladas y creds.json
 └── assets/              # Recursos estáticos y multimedia de la aplicación
-
+```
 ---
 
 ⚙️ Instalación y Configuración Local

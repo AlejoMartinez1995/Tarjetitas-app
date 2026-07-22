@@ -52,9 +52,13 @@ cd Tarjetitas-app
 
 Bash
 python -m venv venv
- En Windows:
+
+**En Windows:**
+
 venv\Scripts\activate
- En Linux/Mac:
+
+**En Linux/Mac:**
+
 source venv/bin/activate
 
 **3. Instalar dependencias**

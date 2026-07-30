@@ -1,4 +1,4 @@
-    import flet as ft
+import flet as ft
 from datetime import datetime
 import os
 import sys
@@ -70,7 +70,9 @@ def formatear_y_totalizar(sheet, tarjeta):
             inicio_bloque = i + 2  # primera fila de datos (1-indexed)
             filas_total = []
         elif en_bloque:
-            if "TOTAL" in row_str:
+            val_d = row[3].strip().upper() if len(row) > 3 else ""
+            val_a = row[0].strip().upper() if len(row) > 0 else ""
+            if val_d.startswith("TOTAL") or val_a.startswith("TOTAL"):
                 filas_total.append(i + 1)
             elif filas_total and not any(c.strip() for c in row):
                 break
@@ -509,29 +511,45 @@ def formatear_y_totalizar(sheet, tarjeta):
         sheet.batch_update(batch_values, value_input_option="USER_ENTERED")
 
 
-# --- Helper para analizar monto numérico ---
+# --- Helper para analizar monto numérico de forma robusta en cualquier locale ---
 def parse_monto(monto_str):
-    monto_str = str(monto_str).replace("$", "").strip()
-    if not monto_str:
+    val_str = str(monto_str).replace("$", "").strip()
+    if not val_str:
         return 0.0
     
-    # Caso: tiene comas y puntos (ej: 1.500,50)
-    if "," in monto_str and "." in monto_str:
-        monto_str = monto_str.replace(".", "").replace(",", ".")
-    # Caso: tiene solo comas (ej: 1500,50)
-    elif "," in monto_str:
-        monto_str = monto_str.replace(",", ".")
-    # Caso: tiene solo un punto (ej: 1.500 o 1500.50)
-    elif "." in monto_str:
-        partes = monto_str.split(".")
-        # Si la última parte tiene exactamente 3 dígitos, es un separador de miles (ej: 1.500)
-        if len(partes[-1]) == 3:
-            monto_str = monto_str.replace(".", "")
+    # Si tiene comas y puntos (ej: 1.500,50 o 1,500.50)
+    if "," in val_str and "." in val_str:
+        idx_comma = val_str.find(",")
+        idx_dot = val_str.find(".")
+        if idx_dot < idx_comma:
+            # Estilo español/regional: 1.250,50
+            val_str = val_str.replace(".", "").replace(",", ".")
         else:
-            # Si tiene 1 o 2 dígitos es un decimal (ej: 1500.5 o 1500.50)
+            # Estilo inglés/US: 1,250.50
+            val_str = val_str.replace(",", "")
+    elif "," in val_str:
+        # Solo coma: 1250,50 o 1,250
+        partes = val_str.split(",")
+        if len(partes[-1]) == 3 and len(partes) > 1:
+            # Miles: 1,250
+            val_str = val_str.replace(",", "")
+        else:
+            # Decimal: 1250,50 o 1250,5
+            val_str = val_str.replace(",", ".")
+    elif "." in val_str:
+        # Solo punto: 1250.50 o 1.250
+        partes = val_str.split(".")
+        if len(partes[-1]) == 3 and len(partes) > 1 and len(partes[0]) <= 3:
+            # Miles: 1.250
+            val_str = val_str.replace(".", "")
+        else:
+            # Decimal: 1250.50
             pass
             
-    return float(monto_str)
+    try:
+        return float(val_str)
+    except Exception:
+        return 0.0
 
 
 # --- 4. PROCESO DE CARGA Y ELIMINACIÓN ---
@@ -546,8 +564,9 @@ def limpiar_planilla(ss):
                 row_num = idx + 1
                 if row_num <= 3:
                     continue  # Mantener las primeras 3 filas de cabecera
-                row_str = " ".join(row).upper()
-                if "TOTAL" in row_str:
+                val_d = row[3].strip().upper() if len(row) > 3 else ""
+                val_a = row[0].strip().upper() if len(row) > 0 else ""
+                if val_d.startswith("TOTAL") or val_a.startswith("TOTAL"):
                     continue  # Mantener filas de totales
                 # Si la fila tiene algún dato, la borramos
                 if any(cell.strip() for cell in row):
@@ -586,10 +605,7 @@ def eliminar_gasto(spreadsheet_id, tarjeta, fecha, detalle, monto, responsable):
             if len(row) < 9:
                 continue
                 
-            try:
-                row_monto = float(row[6].replace("$", "").replace(".", "").replace(",", ".").strip()) if row[6] else 0.0
-            except:
-                row_monto = 0.0
+            row_monto = parse_monto(row[6]) if row[6] else 0.0
                 
             row_detalle = row[1].strip()
             row_responsable = row[3].strip()
@@ -642,17 +658,15 @@ def obtener_ultimos_gastos(spreadsheet_id):
         if not (fecha and "/" in fecha):
             continue
             
-        row_str = " ".join(row).upper()
-        if "TOTAL" in row_str:
+        val_d = row[3].strip().upper() if len(row) > 3 else ""
+        val_a = row[0].strip().upper() if len(row) > 0 else ""
+        if val_d.startswith("TOTAL") or val_a.startswith("TOTAL"):
             continue
             
         if not (detalle and monto_str):
             continue
             
-        try:
-            monto = float(monto_str.replace("$", "").replace(".", "").replace(",", ".").strip())
-        except:
-            monto = 0.0
+        monto = parse_monto(monto_str)
             
         tarjeta = "VISA"
         for i in reversed(range(idx)):
@@ -784,20 +798,30 @@ def reestructurar_hoja_completa(sheet, año, nuevo_gasto=None, tarjeta_nuevo=Non
 
     idx_visa = None
     idx_master = None
-
     for i, row in enumerate(data):
-        if not row:
-            continue
-        first_cell = row[0].strip().upper()
-        if first_cell == "VISA":
+        if row and row[0].strip().upper() == "VISA":
             idx_visa = i
-        elif first_cell == "MASTERCARD":
+        elif row and row[0].strip().upper() == "MASTERCARD":
             idx_master = i
 
-    # Si por alguna razón la hoja existía pero no tiene VISA o MASTERCARD,
-    # la reinicializamos limpia para evitar fallos.
     if idx_visa is None or idx_master is None:
-        return
+        # La estructura está rota (ej: VISA o MASTERCARD borrados). Re-inicializarla automáticamente
+        resp_inicial = nuevo_gasto[3] if nuevo_gasto else "Alejo"
+        sheet = inicializar_estructura(sheet.spreadsheet, año, resp_inicial)
+        # Como acabamos de inicializar, conocemos exactamente el contenido y los índices:
+        # Fila 1 (idx 0): GASTOS, Fila 2 (idx 1): Cabeceras, Fila 3 (idx 2): VISA,
+        # Fila 4 (idx 3): TOTAL ALEJO, Fila 5 (idx 4): Vacía, Fila 6 (idx 5): MASTERCARD
+        idx_visa = 2
+        idx_master = 5
+        data = [
+            [f"GASTOS {año} - TARJETAS"] + [""] * 20,
+            _cabeceras_hoja(),
+            ["VISA"] + [""] * 20,
+            ["", "", "", f"TOTAL {resp_inicial.strip().upper()}"] + [""] * 17,
+            [""] * 21,
+            ["MASTERCARD"] + [""] * 20,
+            ["", "", "", f"TOTAL {resp_inicial.strip().upper()}"] + [""] * 17,
+        ]
 
     filas_visa_raw = data[idx_visa + 1 : idx_master]
     filas_master_raw = data[idx_master + 1 :]
@@ -810,11 +834,17 @@ def reestructurar_hoja_completa(sheet, año, nuevo_gasto=None, tarjeta_nuevo=Non
         for row in filas_raw:
             if not any(c.strip() for c in row):
                 continue
-            row_str = " ".join(row).upper()
-            if "TOTAL" in row_str:
-                # Recopilar responsables de los totales anteriores para no perder nombres
-                parts = row[0].split()
-                for p in parts:
+            es_fila_total = False
+            val_d = row[3].strip().upper() if len(row) > 3 else ""
+            val_a = row[0].strip().upper() if len(row) > 0 else ""
+            if val_d.startswith("TOTAL") or val_a.startswith("TOTAL"):
+                es_fila_total = True
+
+            if es_fila_total:
+                # Recopilar responsables de los totales anteriores para no perder nombres (columna A o columna D)
+                parts_a = row[0].split() if len(row) > 0 else []
+                parts_d = row[3].split() if len(row) > 3 else []
+                for p in parts_a + parts_d:
                     p_upper = p.upper()
                     if p_upper not in ["TOTAL", tarjeta.upper()]:
                         norm = normalizar_nombre(p_upper)
@@ -927,16 +957,28 @@ def reestructurar_hoja_completa(sheet, año, nuevo_gasto=None, tarjeta_nuevo=Non
         nuevas_filas.append(["", "", "", f"TOTAL {nombre.upper()}"] + [""] * 17)
     nuevas_filas.append(["", "", "", "TOTAL MASTERCARD"] + [""] * 17)
 
-    # Limpiar formato de bordes y colores desde la fila 3 (index 2) hacia abajo para evitar restos visuales
+    # Limpiar formato de bordes y colores y descombinar celdas desde la fila 3 (index 2) hacia abajo para evitar restos visuales
     try:
+        max_rows = sheet.row_count
         sheet.spreadsheet.batch_update({
             "requests": [
+                {
+                    "unmergeCells": {
+                        "range": {
+                            "sheetId": sheet.id,
+                            "startRowIndex": 2,  # desde fila 3
+                            "endRowIndex": max_rows,
+                            "startColumnIndex": 0,
+                            "endColumnIndex": 21,
+                        }
+                    }
+                },
                 {
                     "repeatCell": {
                         "range": {
                             "sheetId": sheet.id,
                             "startRowIndex": 2,  # desde fila 3
-                            "endRowIndex": 200,  # rango amplio
+                            "endRowIndex": max_rows,
                             "startColumnIndex": 0,
                             "endColumnIndex": 21,
                         },
@@ -1037,7 +1079,28 @@ def cargar_gasto(spreadsheet_id, detalle, monto, cuotas, responsable, mes_inicio
 # --- 5. INTERFAZ FLET ---
 class LocalStorage:
     def __init__(self):
-        self.filepath = os.path.join(os.path.expanduser("~"), ".tarjetita_storage.json")
+        rutas_posibles = [
+            os.environ.get("FILES_DIR"),
+            os.environ.get("ANDROID_PRIVATE_FILES"),
+            os.path.expanduser("~"),
+            os.getcwd()
+        ]
+        self.filepath = None
+        for r in rutas_posibles:
+            if r:
+                try:
+                    # Asegurar que el directorio exista
+                    os.makedirs(r, exist_ok=True)
+                    path = os.path.join(r, ".tarjetita_storage.json")
+                    # Intentar abrir para append para validar escritura
+                    with open(path, "a", encoding="utf-8") as f:
+                        pass
+                    self.filepath = path
+                    break
+                except Exception:
+                    continue
+        if not self.filepath:
+            self.filepath = os.path.join(os.path.expanduser("~"), ".tarjetita_storage.json")
         self.data = {}
         self.load()
 
@@ -1080,10 +1143,8 @@ def extraer_spreadsheet_id(url_o_id):
 
 
 def main(page: ft.Page):
-    if hasattr(page, "client_storage") and page.client_storage is not None:
-        storage = page.client_storage
-    else:
-        storage = LocalStorage()
+    # Usar siempre LocalStorage persistente en archivo para evitar que Android limpie la caché de client_storage
+    storage = LocalStorage()
 
     page.title = "Tarjetita 2.0"
     page.theme_mode = ft.ThemeMode.DARK
@@ -1172,9 +1233,6 @@ def main(page: ft.Page):
                 # Probar conexión con la planilla del usuario
                 client = obtener_cliente()
                 ss = client.open_by_key(ss_id)
-                
-                # Limpiar cualquier gasto demo del maestro para empezar de cero
-                limpiar_planilla(ss)
                 
                 storage.set("user_email", email)
                 storage.set("spreadsheet_id", ss_id)

@@ -83,7 +83,14 @@ Para que la app pueda interactuar con Google Sheets:
   python main.py
 
 ## 📸 Vista previa de la aplicación
-<p align="center">
-  <img width="600" alt="Vista Previa de la Aplicación" src="screenshots/mobile.jpg" />
-</p>
+<table>
+  <tr>
+    <td align="center">
+      <img width="300" alt="Vista Mobile 1 - Vincular" src="screenshots/vincular.jpg" />
+    </td>
+    <td align="center">
+      <img width="300" alt="Vista Mobile 2 - Cargar" src="screenshots/cargar.jpg" />
+    </td>
+  </tr>
+</table>
 

@@ -15,6 +15,7 @@ La app se sincroniza automáticamente en la nube con un **Dashboard Ejecutivo en
 * 👥 **Soporte Multi-usuario y Responsables Libres:** Permite ingresar cualquier nombre de responsable e inserta automáticamente filas de totales consolidando gastos sin duplicaciones.
 * 🗑️ **Gestión de Gastos y Borrado Atómico:** Lista interactiva con los últimos 5 gastos cargados en el mes. Al eliminar un gasto en cuotas, sus cuotas futuras en las pestañas de años siguientes se borran en cascada automáticamente.
 * 🎨 **Dashboard Financiero Oscuro:** Diseño visual premium en Google Sheets con paletas desaturadas, celdas unificadas y fórmulas dinámicas `SUMIF` / `SUM` localizadas en español.
+* 🤖 **Asistente IA Financiero:** Integración directa con **Google Gemini 1.5 Flash** para ofrecer un análisis financiero de los consumos con consejos personalizados, directos y divertidos al instante.
 
 ---
 
@@ -23,7 +24,9 @@ La app se sincroniza automáticamente en la nube con un **Dashboard Ejecutivo en
 * **Lenguaje:** Python 🐍 (Lógica de negocio, cálculos de cuotas y estructuración de datos).
 * **UI Framework:** Flet 💻📱 (Construcción de interfaz nativa cross-platform).
 * **Integración Cloud:** `gspread` & `google-auth` ☁️ (Conexión segura y liviana con Google Sheets & Drive API).
-* **Empaquetado Android:** `serious_python` / `flet build apk` 📦 (APK optimizada de ~210 MB libre de caché conflictivo).
+* **Base de Datos Remota:** Supabase (PostgreSQL) 🗄️ (Persistencia segura, soporte multiusuario y políticas RLS activadas).
+* **Inteligencia Artificial:** Google Gemini 1.5 Flash API 🤖 (Análisis cognitivo de consumos y recomendaciones personalizadas).
+* **Empaquetado Android:** `serious_python` / `flet build apk` 📦 (APK optimizada libre de caché conflictivo).
 
 ---
 

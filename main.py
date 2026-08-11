@@ -35,6 +35,53 @@ def obtener_supabase_client() -> Client:
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
+def obtener_consejo_ia(api_key, gastos_lista):
+    import requests
+    if not api_key:
+        return "❌ Por favor, configurá tu Gemini API Key en el menú de arriba."
+        
+    if not gastos_lista:
+        return "🤖 No tenés gastos registrados en la base de datos para analizar todavía. ¡Cargá algunos!"
+        
+    resumen = []
+    for g in gastos_lista:
+        resumen.append(
+            f"- Detalle: {g.get('detalle')}, Monto: ${g.get('monto')}, Cuotas: {g.get('cuotas')}, Responsable: {g.get('responsable')}, Tarjeta: {g.get('tarjeta')}, Mes Inicio: {g.get('mes_inicio')}"
+        )
+    resumen_txt = "\n".join(resumen)
+    
+    prompt = (
+        "Actúa como un asistente financiero personal y muy canchero, de Argentina, que le habla de forma graciosa, directa y con estilo neo-brutalista (usá modismos como che, ojo, mira, etc.). "
+        "Analizá la siguiente lista de gastos de tarjeta de crédito de este mes y dale un consejo financiero hiper-personalizado de no más de 3 líneas. "
+        "Sé crítico si gasta mucho o decile algo divertido sobre sus prioridades. Sé bien conciso y directo al grano, sin rodeos.\n\n"
+        f"Gastos actuales:\n{resumen_txt}"
+    )
+    
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    headers = {"Content-Type": "application/json"}
+    payload = {
+        "contents": [{
+            "parts": [{"text": prompt}]
+        }]
+    }
+    
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=15)
+        if response.status_code == 200:
+            data = response.json()
+            try:
+                parts = data["candidates"][0]["content"]["parts"]
+                if parts:
+                    return parts[0]["text"].strip()
+            except Exception:
+                pass
+            return "🤖 No pude generar una recomendación en este momento."
+        else:
+            return f"❌ Error de la API de Gemini (Status {response.status_code})"
+    except Exception as e:
+        return f"❌ Error al conectar con el asistente de IA: {str(e)}"
+
+
 
 # --- 2. CONEXIÓN ---
 def obtener_cliente():
@@ -1425,6 +1472,129 @@ def main(page: ft.Page):
                 st.color = "#FF4C4C"
                 page.update()
 
+        def abrir_config_ia(e):
+            key_input = ft.TextField(
+                label="Gemini API Key",
+                value=storage.get("gemini_api_key") or "",
+                password=True,
+                can_reveal_password=True,
+                **input_style
+            )
+            
+            def guardar_key(e):
+                storage.set("gemini_api_key", key_input.value.strip())
+                dlg.open = False
+                page.update()
+                st.value = "✅ ¡API Key de Gemini guardada!"
+                st.color = "#4CAF50"
+                page.update()
+                
+            dlg = ft.AlertDialog(
+                title=ft.Text("Configuración de Asistente IA 🤖", color="#FFFFFF", size=16, weight="bold"),
+                content=ft.Column(
+                    [
+                        ft.Text("Ingresá tu API Key de Gemini para recibir sugerencias y análisis financiero personalizado.", size=12, color="#8E8E93"),
+                        key_input,
+                        ft.TextButton(
+                            "Obtener API Key gratis en Google AI Studio",
+                            url="https://aistudio.google.com/",
+                            style=ft.ButtonStyle(color="#7D81F7")
+                        )
+                    ],
+                    spacing=12,
+                    height=180,
+                    width=300
+                ),
+                actions=[
+                    ft.TextButton("Cancelar", on_click=lambda e: setattr(dlg, "open", False) or page.update(), style=ft.ButtonStyle(color="#FF4C4C")),
+                    ft.ElevatedButton("Guardar", on_click=guardar_key, style=ft.ButtonStyle(bgcolor="#4CAF50", color="#FFFFFF"))
+                ],
+                bgcolor="#121212",
+                shape=ft.RoundedRectangleBorder(radius=18),
+            )
+            page.dialog = dlg
+            dlg.open = True
+            page.update()
+
+        ai_response_txt = ft.Text(
+            "Acá aparecerá el análisis del Asistente IA...",
+            color="#FFFFFF",
+            size=12,
+            italic=True
+        )
+        
+        ai_container = ft.Container(
+            content=ft.Column(
+                [
+                    ft.Row(
+                        [
+                            ft.Icon(ft.icons.Icons.AUTO_AWESOME, color="#FED34A", size=18),
+                            ft.Text("ASISTENTE FINANCIERO IA", size=12, weight="bold", color="#FED34A"),
+                        ],
+                        spacing=6,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER
+                    ),
+                    ai_response_txt
+                ],
+                spacing=8
+            ),
+            bgcolor="#1A1A1A",
+            border_radius=14,
+            padding=14,
+            border=ft.Border.all(1, "#2D2D2D"),
+            visible=False
+        )
+
+        def click_consultar_ia():
+            gemini_key = storage.get("gemini_api_key")
+            if not gemini_key:
+                abrir_config_ia(None)
+                return
+                
+            ai_container.visible = True
+            ai_response_txt.value = "⏳ Analizando tus consumos del mes con Inteligencia Artificial..."
+            ai_response_txt.color = "#8E8E93"
+            page.update()
+            
+            try:
+                supabase = obtener_supabase_client()
+                res_db = supabase.table("gastos").select("*").eq("spreadsheet_id", ss_id).execute()
+                gastos_completos = res_db.data or []
+                
+                consejo = obtener_consejo_ia(gemini_key, gastos_completos)
+                ai_response_txt.value = consejo
+                ai_response_txt.color = "#FFFFFF"
+                page.update()
+            except Exception as ex:
+                ai_response_txt.value = f"❌ Error: {str(ex)}"
+                ai_response_txt.color = "#FF4C4C"
+                page.update()
+
+        btn_consultar_ia = ft.ElevatedButton(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.icons.Icons.AUTO_AWESOME, color="#FFFFFF", size=18),
+                    ft.Text(
+                        "PREGUNTAR AL ASISTENTE IA",
+                        weight=ft.FontWeight.BOLD,
+                        size=13,
+                        color="#FFFFFF"
+                    ),
+                ],
+                alignment=ft.MainAxisAlignment.CENTER,
+                spacing=8,
+            ),
+            on_click=lambda e: click_consultar_ia(),
+            width=360,
+            height=40,
+            style=ft.ButtonStyle(
+                bgcolor={"": "#7D81F7", "hovered": "#6C70E6"},  # Lavender button
+                shape=ft.RoundedRectangleBorder(radius=14),
+                color={"": "#FFFFFF"},
+                elevation={"": 2, "hovered": 4},
+            ),
+        )
+
         def logout_click(e):
             storage.clear()
             mostrar_registro()
@@ -1460,6 +1630,14 @@ def main(page: ft.Page):
                 ft.Row(
                     [
                         ft.Text(f"Planilla: {email}", size=11, color="#8E8E93", expand=True, overflow=ft.TextOverflow.ELLIPSIS),
+                        ft.IconButton(
+                            ft.icons.Icons.AUTO_AWESOME,
+                            icon_color="#FED34A",
+                            icon_size=16,
+                            on_click=abrir_config_ia,
+                            tooltip="Configurar Asistente IA",
+                            padding=0
+                        ),
                         ft.IconButton(
                             ft.icons.Icons.LOGOUT,
                             icon_color="#FF4C4C",
@@ -1501,6 +1679,9 @@ def main(page: ft.Page):
                         elevation={"": 2, "hovered": 4},
                     ),
                 ),
+                
+                btn_consultar_ia,
+                ai_container,
                 
                 st,
                 

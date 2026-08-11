@@ -1483,8 +1483,7 @@ def main(page: ft.Page):
             
             def guardar_key(e):
                 storage.set("gemini_api_key", key_input.value.strip())
-                dlg.open = False
-                page.update()
+                page.close(dlg)
                 st.value = "✅ ¡API Key de Gemini guardada!"
                 st.color = "#4CAF50"
                 page.update()
@@ -1506,15 +1505,13 @@ def main(page: ft.Page):
                     width=300
                 ),
                 actions=[
-                    ft.TextButton("Cancelar", on_click=lambda e: setattr(dlg, "open", False) or page.update(), style=ft.ButtonStyle(color="#FF4C4C")),
+                    ft.TextButton("Cancelar", on_click=lambda e: page.close(dlg), style=ft.ButtonStyle(color="#FF4C4C")),
                     ft.ElevatedButton("Guardar", on_click=guardar_key, style=ft.ButtonStyle(bgcolor="#4CAF50", color="#FFFFFF"))
                 ],
                 bgcolor="#121212",
                 shape=ft.RoundedRectangleBorder(radius=18),
             )
-            page.dialog = dlg
-            dlg.open = True
-            page.update()
+            page.open(dlg)
 
         ai_response_txt = ft.Text(
             "Acá aparecerá el análisis del Asistente IA...",

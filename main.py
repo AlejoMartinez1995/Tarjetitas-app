@@ -26,6 +26,14 @@ if "wsgiref" not in sys.modules:
 
 
 import gspread
+from supabase import create_client, Client
+
+SUPABASE_URL = "https://sqyitowpahouqglsrcil.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNxeWl0b3dwYWhvdXFnbHNyY2lsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwODUwOTUsImV4cCI6MjEwMTY2MTA5NX0.RiDmI2styrbCJ4Ip4gCyVZdTJGGh-8CmN1B_tk6JEX0"
+
+def obtener_supabase_client() -> Client:
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
+
 
 
 # --- 2. CONEXIÓN ---
@@ -493,19 +501,24 @@ def formatear_y_totalizar(sheet, tarjeta):
             if data_end >= data_start:
                 formula = f'=SUMIF($D${data_start}:$D${data_end}; "{nombre}"; {letra}${data_start}:{letra}${data_end})'
             else:
-                formula = "$ 0.00"
+                formula = 0.0
             batch_values.append({"range": f"{letra}{fila_t}", "values": [[formula]]})
 
     # Escribir fórmula SUM para la fila final de total general
     fila_general = filas_total[-1]
-    fila_totales_inicio = filas_total[0]
-    fila_totales_fin = filas_total[-2] if len(filas_total) > 1 else filas_total[0]
-
-    for col_idx in range(10, 22):
-        letra = chr(64 + col_idx)
-        # =SUM(letra_totales_inicio:letra_totales_fin)
-        formula = f"=SUM({letra}{fila_totales_inicio}:{letra}{fila_totales_fin})"
-        batch_values.append({"range": f"{letra}{fila_general}", "values": [[formula]]})
+    if len(filas_total) > 1:
+        fila_totales_inicio = filas_total[0]
+        fila_totales_fin = filas_total[-2]
+        for col_idx in range(10, 22):
+            letra = chr(64 + col_idx)
+            # =SUM(letra_totales_inicio:letra_totales_fin)
+            formula = f"=SUM({letra}{fila_totales_inicio}:{letra}{fila_totales_fin})"
+            batch_values.append({"range": f"{letra}{fila_general}", "values": [[formula]]})
+    else:
+        # Solo hay una fila de total general y no hay gastos ni otros totales. Escribir 0.0
+        for col_idx in range(10, 22):
+            letra = chr(64 + col_idx)
+            batch_values.append({"range": f"{letra}{fila_general}", "values": [[0.0]]})
 
     if batch_values:
         sheet.batch_update(batch_values, value_input_option="USER_ENTERED")
@@ -579,118 +592,40 @@ def limpiar_planilla(ss):
             print(f"Error al limpiar la hoja {sheet.title}: {str(e)}")
 
 
-def eliminar_gasto(spreadsheet_id, tarjeta, fecha, detalle, monto, responsable):
-    client = obtener_cliente()
-    ss = client.open_by_key(spreadsheet_id)
-    
+def eliminar_gasto(gasto_id, spreadsheet_id):
     try:
-        año_actual = datetime.strptime(fecha, "%d/%m/%Y").year
-    except Exception:
-        año_actual = datetime.now().year
-        
-    monto_val = float(monto)
-    
-    for año in range(año_actual, año_actual + 6):
-        try:
-            sheet = ss.worksheet(f"Gastos {año}")
-        except Exception:
-            continue
-            
-        data = sheet.get_all_values()
-        fila_a_borrar = None
-        
-        for idx, row in enumerate(data):
-            if idx < 3:
-                continue
-            if len(row) < 9:
-                continue
-                
-            row_monto = parse_monto(row[6]) if row[6] else 0.0
-                
-            row_detalle = row[1].strip()
-            row_responsable = row[3].strip()
-            row_fecha = row[0].strip()
-            
-            if año == año_actual:
-                if row_fecha == fecha and row_responsable.upper() == responsable.upper() and abs(row_monto - monto_val) < 0.01 and detalle.upper() in row_detalle.upper():
-                    fila_a_borrar = idx + 1
-                    break
-            else:
-                if row_responsable.upper() == responsable.upper() and abs(row_monto - monto_val) < 0.01 and detalle.upper() in row_detalle.upper() and "(CONT.)" in row_detalle.upper():
-                    fila_a_borrar = idx + 1
-                    break
-                    
-        if fila_a_borrar:
-            sheet.delete_rows(fila_a_borrar)
-            formatear_y_totalizar(sheet, tarjeta)
+        supabase = obtener_supabase_client()
+        supabase.table("gastos").delete().eq("id", gasto_id).execute()
+        sincronizar_supabase_a_sheets(spreadsheet_id)
+    except Exception as e:
+        raise Exception(f"Error al eliminar gasto en Supabase: {str(e)}")
+
 
 def obtener_ultimos_gastos(spreadsheet_id):
-    client = obtener_cliente()
-    ss = client.open_by_key(spreadsheet_id)
-    año_actual = datetime.now().year
-    
     try:
-        sheet = ss.worksheet(f"Gastos {año_actual}")
-    except Exception:
-        for s in ss.worksheets():
-            if s.title.startswith("Gastos "):
-                sheet = s
-                break
-        else:
-            return []
-            
-    data = sheet.get_all_values()
-    gastos = []
-    
-    for idx in reversed(range(len(data))):
-        if idx < 3:
-            continue
-        row = data[idx]
-        if len(row) < 9:
-            continue
-            
-        fecha = row[0].strip()
-        detalle = row[1].strip()
-        responsable = row[3].strip()
-        monto_str = row[6].strip()
-        cuotas_str = row[7].strip()
-        
-        if not (fecha and "/" in fecha):
-            continue
-            
-        val_d = row[3].strip().upper() if len(row) > 3 else ""
-        val_a = row[0].strip().upper() if len(row) > 0 else ""
-        if val_d.startswith("TOTAL") or val_a.startswith("TOTAL"):
-            continue
-            
-        if not (detalle and monto_str):
-            continue
-            
-        monto = parse_monto(monto_str)
-            
-        tarjeta = "VISA"
-        for i in reversed(range(idx)):
-            row_prev_str = " ".join(data[i]).upper()
-            if "VISA" in row_prev_str and "TOTAL" not in row_prev_str:
-                tarjeta = "VISA"
-                break
-            elif "MASTERCARD" in row_prev_str and "TOTAL" not in row_prev_str:
-                tarjeta = "MASTERCARD"
-                break
-                
-        gastos.append({
-            "fecha": fecha,
-            "detalle": detalle,
-            "responsable": responsable,
-            "monto": monto,
-            "cuotas": cuotas_str,
-            "tarjeta": tarjeta
-        })
-        
-        if len(gastos) >= 5:
-            break
-            
-    return gastos
+        supabase = obtener_supabase_client()
+        res = supabase.table("gastos")\
+            .select("*")\
+            .eq("spreadsheet_id", spreadsheet_id)\
+            .order("id", desc=True)\
+            .limit(5)\
+            .execute()
+        # Mapear de base de datos a formato de UI de Flet
+        gastos = []
+        for g in (res.data or []):
+            gastos.append({
+                "id": g["id"],
+                "fecha": g["fecha"],
+                "detalle": g["detalle"],
+                "responsable": g["responsable"],
+                "monto": g["monto"],
+                "cuotas": str(g["cuotas"]),
+                "tarjeta": g["tarjeta"]
+            })
+        return gastos
+    except Exception as e:
+        print(f"Error al obtener gastos: {str(e)}")
+        return []
 
 def _cabeceras_hoja():
     """Devuelve la fila de cabeceras estándar de cada hoja de gastos."""
@@ -776,188 +711,169 @@ def inicializar_estructura(ss, año, responsable):
 
 
 
-def reestructurar_hoja_completa(sheet, año, nuevo_gasto=None, tarjeta_nuevo=None):
-    """
-    Lee la hoja completa de gastos, separa los gastos de los totales para VISA y MASTERCARD,
-    e inserta en memoria el nuevo gasto si viene especificado.
-    Reconstruye el diseño agrupado limpio:
-      - Gastos arriba.
-      - Totales de responsables abajo con SUMIF.
-      - Total general al final con SUM.
-    Escribe todo en una sola llamada de actualización y aplica formatos.
-    """
-    data = sheet.get_all_values()
-    if len(data) < 3:
-        # Inicializar estructura mínima si la hoja está totalmente vacía
-        resp_inicial = nuevo_gasto[3] if nuevo_gasto else "ALEJO"
-        # inicializar_estructura ya crea la estructura limpia base
-        return
+# --- Old reestructurar_hoja_completa cleaned up ---
 
-    titulo_hoja = data[0]
-    cabeceras = data[1]
+def sincronizar_supabase_a_sheets(spreadsheet_id):
+    client = obtener_cliente()
+    ss = client.open_by_key(spreadsheet_id)
+    
+    supabase = obtener_supabase_client()
+    res = supabase.table("gastos").select("*").eq("spreadsheet_id", spreadsheet_id).execute()
+    db_gastos = res.data or []
+    
+    años_activos = set()
+    meses_l = [
+        "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+    ]
+    
+    for g in db_gastos:
+        partes_fecha = g["fecha"].split("/")
+        año_compra = int(partes_fecha[2]) if len(partes_fecha) == 3 else datetime.now().year
+        try:
+            mes_idx = meses_l.index(g["mes_inicio"])
+        except ValueError:
+            mes_idx = 0
+        cant_cuotas = g["cuotas"]
+        for c in range(cant_cuotas):
+            mes_actual = mes_idx + c
+            año_del_mes = año_compra + (mes_actual // 12)
+            años_activos.add(año_del_mes)
+            
+    if not años_activos:
+        años_activos.add(datetime.now().year)
+        
+    for año in sorted(list(años_activos)):
+        try:
+            sheet = ss.worksheet(f"Gastos {año}")
+            # Verificación de estructura robusta (Self-Healing)
+            data_check = sheet.get_all_values()
+            
+            cabeceras_ok = False
+            if len(data_check) >= 2:
+                cabeceras_actuales = data_check[1]
+                cabeceras_esperadas = _cabeceras_hoja()
+                if len(cabeceras_actuales) >= len(cabeceras_esperadas):
+                    # Comparamos las primeras 21 columnas
+                    if cabeceras_actuales[:21] == cabeceras_esperadas:
+                        cabeceras_ok = True
+            
+            tiene_visa = any("VISA" in " ".join(r).upper() for r in data_check)
+            tiene_master = any("MASTERCARD" in " ".join(r).upper() for r in data_check)
+            
+            if not cabeceras_ok or not tiene_visa or not tiene_master:
+                # Si se detectan columnas rotas o eliminadas, eliminamos la hoja y la volvemos a crear limpia
+                try:
+                    ss.del_worksheet(sheet)
+                except Exception:
+                    pass
+                primer_resp = db_gastos[0]["responsable"] if db_gastos else "Alejo"
+                sheet = inicializar_estructura(ss, año, primer_resp)
+        except Exception:
+            primer_resp = db_gastos[0]["responsable"] if db_gastos else "Alejo"
+            sheet = inicializar_estructura(ss, año, primer_resp)
+            
+        reestructurar_hoja_completa_desde_db(sheet, año, db_gastos)
+        formatear_y_totalizar(sheet, "VISA")
+        formatear_y_totalizar(sheet, "MASTERCARD")
 
-    idx_visa = None
-    idx_master = None
-    for i, row in enumerate(data):
-        if row and row[0].strip().upper() == "VISA":
-            idx_visa = i
-        elif row and row[0].strip().upper() == "MASTERCARD":
-            idx_master = i
 
-    if idx_visa is None or idx_master is None:
-        # La estructura está rota (ej: VISA o MASTERCARD borrados). Re-inicializarla automáticamente
-        resp_inicial = nuevo_gasto[3] if nuevo_gasto else "Alejo"
-        sheet = inicializar_estructura(sheet.spreadsheet, año, resp_inicial)
-        # Como acabamos de inicializar, conocemos exactamente el contenido y los índices:
-        # Fila 1 (idx 0): GASTOS, Fila 2 (idx 1): Cabeceras, Fila 3 (idx 2): VISA,
-        # Fila 4 (idx 3): TOTAL ALEJO, Fila 5 (idx 4): Vacía, Fila 6 (idx 5): MASTERCARD
-        idx_visa = 2
-        idx_master = 5
-        data = [
-            [f"GASTOS {año} - TARJETAS"] + [""] * 20,
-            _cabeceras_hoja(),
-            ["VISA"] + [""] * 20,
-            ["", "", "", f"TOTAL {resp_inicial.strip().upper()}"] + [""] * 17,
-            [""] * 21,
-            ["MASTERCARD"] + [""] * 20,
-            ["", "", "", f"TOTAL {resp_inicial.strip().upper()}"] + [""] * 17,
-        ]
-
-    filas_visa_raw = data[idx_visa + 1 : idx_master]
-    filas_master_raw = data[idx_master + 1 :]
-
-    def clasificar_bloque(filas_raw, tarjeta):
-        gastos = []
-        responsables_set = set()
-        nombres_bonitos = {}
-
-        for row in filas_raw:
-            if not any(c.strip() for c in row):
-                continue
-            es_fila_total = False
-            val_d = row[3].strip().upper() if len(row) > 3 else ""
-            val_a = row[0].strip().upper() if len(row) > 0 else ""
-            if val_d.startswith("TOTAL") or val_a.startswith("TOTAL"):
-                es_fila_total = True
-
-            if es_fila_total:
-                # Recopilar responsables de los totales anteriores para no perder nombres (columna A o columna D)
-                parts_a = row[0].split() if len(row) > 0 else []
-                parts_d = row[3].split() if len(row) > 3 else []
-                for p in parts_a + parts_d:
-                    p_upper = p.upper()
-                    if p_upper not in ["TOTAL", tarjeta.upper()]:
-                        norm = normalizar_nombre(p_upper)
-                        responsables_set.add(norm)
-                        nombres_bonitos[norm] = p.strip().title()
-                continue
-
-            fecha = row[0].strip()
-            detalle = row[1].strip()
-            responsable = row[3].strip() if len(row) > 3 else ""
-
-            if fecha or detalle:
-                gasto_row = list(row) + [""] * (21 - len(row))
+def reestructurar_hoja_completa_desde_db(sheet, año, db_gastos):
+    meses_l = [
+        "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+    ]
+    
+    gastos_visa = []
+    gastos_master = []
+    
+    for g in db_gastos:
+        partes_fecha = g["fecha"].split("/")
+        g_año_compra = int(partes_fecha[2]) if len(partes_fecha) == 3 else datetime.now().year
+        try:
+            g_mes_idx = meses_l.index(g["mes_inicio"])
+        except ValueError:
+            g_mes_idx = 0
+            
+        cant_cuotas = g["cuotas"]
+        monto_total = g["monto"]
+        valor_cuota = monto_total / cant_cuotas
+        
+        cuotas_en_este_año = []
+        for c in range(cant_cuotas):
+            mes_actual = g_mes_idx + c
+            año_del_mes = g_año_compra + (mes_actual // 12)
+            if año_del_mes == año:
+                cuotas_en_este_año.append(mes_actual % 12)
                 
-                # --- LIMPIAR MONTOS Y TIPOS DE DATOS ---
-                # Evita que se escriban strings formateados como '$ 50.000,00' en las celdas,
-                # lo que rompe las sumas y totales. Escribimos números limpios.
-                try:
-                    gasto_row[6] = parse_monto(gasto_row[6]) if gasto_row[6] else 0.0
-                except Exception:
-                    gasto_row[6] = 0.0
+        if cuotas_en_este_año:
+            es_año_compra = (g_año_compra == año)
+            det_label = g["detalle"] if es_año_compra else f"{g['detalle']} (Cont.)"
+            
+            id_mes = f"{str(g_año_compra)[2:]}-{meses_l[g_mes_idx][:3].lower()}"
+            fila = [
+                g["fecha"],
+                det_label,
+                "",
+                g["responsable"],
+                "",
+                id_mes,
+                float(monto_total),      # Escribir número puro (float)
+                int(cant_cuotas),        # Escribir número puro (int)
+                float(valor_cuota)       # Escribir número puro (float)
+            ]
+            for m in range(12):
+                if m in cuotas_en_este_año:
+                    fila.append("=")
+                else:
+                    fila.append("")
+                    
+            if g["tarjeta"].upper() == "VISA":
+                gastos_visa.append(fila)
+            else:
+                gastos_master.append(fila)
                 
-                try:
-                    gasto_row[7] = int(str(gasto_row[7]).replace(".0", "").strip()) if gasto_row[7] else 1
-                except Exception:
-                    gasto_row[7] = 1
-
-                try:
-                    gasto_row[8] = parse_monto(gasto_row[8]) if gasto_row[8] else 0.0
-                except Exception:
-                    gasto_row[8] = 0.0
-
-                gastos.append(gasto_row)
-                if responsable:
-                    norm = normalizar_nombre(responsable)
-                    responsables_set.add(norm)
-                    nombres_bonitos[norm] = responsable.strip().title()
-
-        return gastos, responsables_set, nombres_bonitos
-
-    gastos_visa, resp_visa, bonitos_visa = clasificar_bloque(filas_visa_raw, "VISA")
-    gastos_master, resp_master, bonitos_master = clasificar_bloque(filas_master_raw, "MASTERCARD")
-
-    # Si hay un nuevo gasto a insertar
-    if nuevo_gasto is not None and tarjeta_nuevo is not None:
-        gasto_cleaned = list(nuevo_gasto) + [""] * (21 - len(nuevo_gasto))
-        gasto_cleaned[6] = parse_monto(gasto_cleaned[6])
-        gasto_cleaned[7] = int(str(gasto_cleaned[7]).replace(".0", "").strip())
-        gasto_cleaned[8] = parse_monto(gasto_cleaned[8])
-
-        if tarjeta_nuevo.upper() == "VISA":
-            gastos_visa.append(gasto_cleaned)
-            norm = normalizar_nombre(nuevo_gasto[3])
-            resp_visa.add(norm)
-            bonitos_visa[norm] = nuevo_gasto[3].strip().title()
-        else:
-            gastos_master.append(gasto_cleaned)
-            norm = normalizar_nombre(nuevo_gasto[3])
-            resp_master.add(norm)
-            bonitos_master[norm] = nuevo_gasto[3].strip().title()
-
-    # Re-asegurar que haya al menos un responsable
-    if not resp_visa:
-        resp_visa.add("alejo")
-        bonitos_visa["alejo"] = "Alejo"
-    if not resp_master:
-        resp_master.add("alejo")
-        bonitos_master["alejo"] = "Alejo"
-
-    # Construir las nuevas filas del documento
     nuevas_filas = []
-    nuevas_filas.append(titulo_hoja + [""] * (21 - len(titulo_hoja)))
-    nuevas_filas.append(cabeceras + [""] * (21 - len(cabeceras)))
-
+    nuevas_filas.append([f"GASTOS {año} - TARJETAS"] + [""] * 20)
+    nuevas_filas.append(_cabeceras_hoja())
+    
     # --- Reconstruir VISA ---
     nuevas_filas.append(["VISA"] + [""] * 20)
-    for g in gastos_visa:
+    gastos_visa_sorted = sorted(gastos_visa, key=lambda x: (x[0], x[3].upper()))
+    for g in gastos_visa_sorted:
         fila_idx_nueva = len(nuevas_filas) + 1
-        # Convertir cuotas mensuales a referencias a la columna I de la fila actual
         for m_idx in range(9, 21):
-            val_m = str(g[m_idx]).strip()
-            if val_m and val_m not in ["0", "0.0", "0.00", "$ 0.00", "$ 0,00"]:
+            if g[m_idx] == "=":
                 g[m_idx] = f"=$I{fila_idx_nueva}"
-            else:
-                g[m_idx] = ""
         nuevas_filas.append(g)
-
+        
+    resp_visa = set(g[3].upper() for g in gastos_visa_sorted)
+    bonitos_visa = {r: r.title() for r in resp_visa}
     for r in sorted(list(resp_visa)):
         nombre = bonitos_visa[r]
         nuevas_filas.append(["", "", "", f"TOTAL {nombre.upper()}"] + [""] * 17)
     nuevas_filas.append(["", "", "", "TOTAL VISA"] + [""] * 17)
-
+    
     # Separador
     nuevas_filas.append([""] * 21)
-
+    
     # --- Reconstruir MASTERCARD ---
     nuevas_filas.append(["MASTERCARD"] + [""] * 20)
-    for g in gastos_master:
+    gastos_master_sorted = sorted(gastos_master, key=lambda x: (x[0], x[3].upper()))
+    for g in gastos_master_sorted:
         fila_idx_nueva = len(nuevas_filas) + 1
         for m_idx in range(9, 21):
-            val_m = str(g[m_idx]).strip()
-            if val_m and val_m not in ["0", "0.0", "0.00", "$ 0.00", "$ 0,00"]:
+            if g[m_idx] == "=":
                 g[m_idx] = f"=$I{fila_idx_nueva}"
-            else:
-                g[m_idx] = ""
         nuevas_filas.append(g)
-
+        
+    resp_master = set(g[3].upper() for g in gastos_master_sorted)
+    bonitos_master = {r: r.title() for r in resp_master}
     for r in sorted(list(resp_master)):
         nombre = bonitos_master[r]
         nuevas_filas.append(["", "", "", f"TOTAL {nombre.upper()}"] + [""] * 17)
     nuevas_filas.append(["", "", "", "TOTAL MASTERCARD"] + [""] * 17)
-
-    # Limpiar formato de bordes y colores y descombinar celdas desde la fila 3 (index 2) hacia abajo para evitar restos visuales
+    
     try:
         max_rows = sheet.row_count
         sheet.spreadsheet.batch_update({
@@ -966,7 +882,7 @@ def reestructurar_hoja_completa(sheet, año, nuevo_gasto=None, tarjeta_nuevo=Non
                     "unmergeCells": {
                         "range": {
                             "sheetId": sheet.id,
-                            "startRowIndex": 2,  # desde fila 3
+                            "startRowIndex": 2,
                             "endRowIndex": max_rows,
                             "startColumnIndex": 0,
                             "endColumnIndex": 21,
@@ -977,14 +893,14 @@ def reestructurar_hoja_completa(sheet, año, nuevo_gasto=None, tarjeta_nuevo=Non
                     "repeatCell": {
                         "range": {
                             "sheetId": sheet.id,
-                            "startRowIndex": 2,  # desde fila 3
+                            "startRowIndex": 2,
                             "endRowIndex": max_rows,
                             "startColumnIndex": 0,
                             "endColumnIndex": 21,
                         },
                         "cell": {
                             "userEnteredFormat": {
-                                "backgroundColor": {"red": 0.08, "green": 0.17, "blue": 0.24},  # Azul profundo
+                                "backgroundColor": {"red": 0.08, "green": 0.17, "blue": 0.24},
                                 "borders": {
                                     "top": {"style": "NONE"},
                                     "bottom": {"style": "NONE"},
@@ -1000,82 +916,40 @@ def reestructurar_hoja_completa(sheet, año, nuevo_gasto=None, tarjeta_nuevo=Non
         })
     except Exception:
         pass
-
-    # Escribir la hoja completa de forma instantánea
+        
     sheet.clear()
     sheet.update(range_name="A1", values=nuevas_filas, value_input_option="USER_ENTERED")
 
 
 def cargar_gasto(spreadsheet_id, detalle, monto, cuotas, responsable, mes_inicio, tarjeta):
-    client = obtener_cliente()
-    ss = client.open_by_key(spreadsheet_id)
-    año_actual = datetime.now().year
+    storage = LocalStorage()
+    email = storage.get("user_email") or "usuario@gmail.com"
     monto_f = parse_monto(monto)
     cant_c = int(cuotas)
-    val_c = monto_f / cant_c
-    meses = [
-        "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
-    ]
-    idx_m = meses.index(mes_inicio)
+    
+    try:
+        supabase = obtener_supabase_client()
+        gasto_data = {
+            "user_email": email,
+            "spreadsheet_id": spreadsheet_id,
+            "fecha": datetime.now().strftime("%d/%m/%Y"),
+            "detalle": detalle.strip().title(),
+            "monto": monto_f,
+            "cuotas": cant_c,
+            "responsable": responsable.strip().title(),
+            "mes_inicio": mes_inicio,
+            "tarjeta": tarjeta.upper()
+        }
+        supabase.table("gastos").insert(gasto_data).execute()
+    except Exception as e:
+        raise Exception(f"Error al registrar en Supabase: {str(e)}")
+        
+    try:
+        sincronizar_supabase_a_sheets(spreadsheet_id)
+    except Exception as e:
+        raise Exception(f"Error al sincronizar con Sheets: {str(e)}")
 
-    def procesar_hoja(año, cuotas_restantes, start_idx):
-        # Crear/inicializar la hoja si no existe
-        try:
-            sheet = ss.worksheet(f"Gastos {año}")
-        except Exception:
-            sheet = inicializar_estructura(ss, año, responsable)
-        else:
-            # Asegurar que tenga estructura mínima
-            data_check = sheet.get_all_values()
-            tiene_estructura = any(
-                "VISA" in " ".join(r).upper() or "MASTERCARD" in " ".join(r).upper()
-                for r in data_check
-            )
-            if not tiene_estructura:
-                sheet = inicializar_estructura(ss, año, responsable)
 
-        # Generar los datos del nuevo gasto temporal (sin fórmulas de fila dura aún)
-        det_final = (
-            detalle.strip().title()
-            if año == año_actual
-            else f"{detalle.strip().title()} (Cont.)"
-        )
-        # Fila: Fecha, Detalle, Vacío, Responsable, Vacío, ID-Mes, Total, Cuotas, Valor Cuota
-        gasto_fila = [
-            datetime.now().strftime("%d/%m/%Y"),
-            det_final,
-            "",
-            responsable.strip().title(),
-            "",
-            f"{str(año)[2:]}-{meses[start_idx][:3].lower()}",
-            monto_f,
-            cant_c,
-            val_c,
-        ]
-
-        # Rellenar los 12 meses (indicador temporal '=')
-        for i in range(12):
-            if i >= start_idx and cuotas_restantes > 0:
-                gasto_fila.append("=")  # Marcador que reestructurar_hoja_completa reemplazará con f'=$I{fila}'
-                cuotas_restantes -= 1
-            else:
-                gasto_fila.append("")
-
-        # Insertar y reestructurar la hoja entera en memoria + formatear
-        reestructurar_hoja_completa(sheet, año, nuevo_gasto=gasto_fila, tarjeta_nuevo=tarjeta)
-        formatear_y_totalizar(sheet, "VISA")
-        formatear_y_totalizar(sheet, "MASTERCARD")
-
-        return cuotas_restantes
-
-    quedan = procesar_hoja(año_actual, cant_c, idx_m)
-    año_iter = año_actual
-    while quedan > 0:
-        año_iter += 1
-        if año_iter > año_actual + 5:
-            break
-        quedan = procesar_hoja(año_iter, quedan, 0)
 # --- 5. INTERFAZ FLET ---
 class LocalStorage:
     def __init__(self):
@@ -1148,7 +1022,7 @@ def main(page: ft.Page):
 
     page.title = "Tarjetita 2.0"
     page.theme_mode = ft.ThemeMode.DARK
-    page.bgcolor = "#0B0C10"  # Midnight dark background
+    page.bgcolor = "#C2D2C4"  # Sage green background as the canvas
     page.window_width = 450
     page.window_height = 800
     page.scroll = ft.ScrollMode.ADAPTIVE
@@ -1156,11 +1030,13 @@ def main(page: ft.Page):
     page.vertical_alignment = ft.MainAxisAlignment.CENTER
 
     input_style = {
-        "border_color": "#45A29E",
-        "focused_border_color": "#66FCF1",
-        "label_style": ft.TextStyle(color="#C5C6C7"),
+        "border_color": "#2D2D2D",
+        "focused_border_color": "#7D81F7",  # Lavender focused border
+        "bgcolor": "#1A1A1A",
+        "label_style": ft.TextStyle(color="#8E8E93"),
         "text_style": ft.TextStyle(color="#FFFFFF"),
-        "border_radius": 10,
+        "border_radius": 14,
+        "content_padding": 12,
     }
 
     def es_correo_valido(email):
@@ -1169,18 +1045,18 @@ def main(page: ft.Page):
         return bool(re.match(patron, email))
 
     main_container = ft.Container(
-        bgcolor="#1F2833",
-        border_radius=20,
+        bgcolor="#121212",  # Deep charcoal phone screen body
+        border_radius=28,
         padding=25,
         width=400,
-        border=ft.Border.all(1, "#45A29E"),
+        border=ft.Border.all(2, "#2C2C2C"),
         shadow=ft.BoxShadow(
-            spread_radius=1,
-            blur_radius=20,
-            color="#99000000",
-            offset=ft.Offset(0, 10),
+            spread_radius=0,
+            blur_radius=30,
+            color="#4D000000",
+            offset=ft.Offset(0, 15),
         ),
-        margin=ft.Margin.only(top=10, bottom=10)
+        margin=ft.Margin.only(top=15, bottom=15)
     )
 
     def mostrar_registro():
@@ -1252,18 +1128,18 @@ def main(page: ft.Page):
             [
                 ft.Row(
                     [
-                        ft.Icon(ft.icons.Icons.CREDIT_CARD, color="#66FCF1", size=36),
+                        ft.Icon(ft.icons.Icons.CREDIT_CARD, color="#FE7A5C", size=36),  # Coral card icon
                         ft.Text(
                             "Tarjetita 2.0",
                             size=26,
                             weight=ft.FontWeight.BOLD,
-                            color="#66FCF1"
+                            color="#FFFFFF"
                         ),
                     ],
                     alignment=ft.MainAxisAlignment.CENTER,
                     spacing=10,
                 ),
-                ft.Divider(color="#45A29E", thickness=1, height=10),
+                ft.Divider(color="#2D2D2D", thickness=1, height=10),
 
                 # ── Instrucciones sin botones ──────────────────────────────
                 ft.Container(
@@ -1272,35 +1148,37 @@ def main(page: ft.Page):
                             ft.Text("Cómo conectar tu planilla:", size=13, weight="bold", color="#FFFFFF"),
                             ft.Text(
                                 "1. Abrí Google Drive en tu navegador y creá una planilla nueva (o usá la que ya tenés).",
-                                size=12, color="#C5C6C7"
+                                size=12, color="#8E8E93"
                             ),
                             ft.Text(
                                 "2. En esa planilla, tocá Compartir e ingresá este correo con permiso de Editor:",
-                                size=12, color="#C5C6C7"
+                                size=12, color="#8E8E93"
                             ),
                             ft.Container(
                                 content=ft.Text(
                                     "creds-json@targetita-app.iam.gserviceaccount.com",
                                     size=11,
-                                    color="#66FCF1",
+                                    color="#FE7A5C",  # Highlighted credentials in Coral
                                     selectable=True,
                                     text_align="center",
+                                    weight="bold",
                                 ),
-                                bgcolor="#0B0C10",
-                                padding=8,
-                                border_radius=6,
+                                bgcolor="#1A1A1A",
+                                padding=10,
+                                border_radius=8,
+                                border=ft.Border.all(1, "#2D2D2D"),
                             ),
                             ft.Text(
                                 "3. Copiá el enlace de tu planilla (Compartir → Copiar enlace) y pegalo acá abajo junto con tu correo de Google.",
-                                size=12, color="#C5C6C7"
+                                size=12, color="#8E8E93"
                             ),
                         ],
                         spacing=8,
                     ),
-                    bgcolor="#151B24",
-                    padding=14,
-                    border_radius=10,
-                    border=ft.Border.all(0.5, "#45A29E"),
+                    bgcolor="#181818",
+                    padding=16,
+                    border_radius=16,
+                    border=ft.Border.all(1, "#2D2D2D"),
                 ),
 
                 email_input,
@@ -1309,18 +1187,20 @@ def main(page: ft.Page):
                 ft.ElevatedButton(
                     content=ft.Row(
                         [
-                            ft.Icon(ft.icons.Icons.LINK, color="#0B0C10", size=18),
-                            ft.Text("VINCULAR PLANILLA", weight=ft.FontWeight.BOLD, color="#0B0C10", size=13),
+                            ft.Icon(ft.icons.Icons.LINK, color="#121212", size=18),
+                            ft.Text("VINCULAR PLANILLA", weight=ft.FontWeight.BOLD, color="#121212", size=13),
                         ],
                         alignment=ft.MainAxisAlignment.CENTER,
                         spacing=6,
                     ),
                     on_click=registrar_click,
                     width=320,
-                    height=45,
+                    height=48,
                     style=ft.ButtonStyle(
-                        bgcolor={"": "#66FCF1", "hovered": "#45A29E"},
-                        shape=ft.RoundedRectangleBorder(radius=10),
+                        bgcolor={"": "#7D81F7", "hovered": "#6C70E6"},  # Lavender button
+                        shape=ft.RoundedRectangleBorder(radius=14),
+                        color={"": "#121212"},
+                        elevation={"": 2, "hovered": 4},
                     ),
                 ),
                 reg_status
@@ -1349,7 +1229,7 @@ def main(page: ft.Page):
         mon = ft.TextField(
             label="Monto Total",
             keyboard_type=ft.KeyboardType.NUMBER,
-            prefix=ft.Text("$ ", style=ft.TextStyle(color="#66FCF1")),
+            prefix=ft.Text("$ ", style=ft.TextStyle(color="#FE7A5C")),
             col=7,
             **input_style
         )
@@ -1471,7 +1351,10 @@ def main(page: ft.Page):
                         ft.Text("No hay gastos registrados este mes.", color="#C5C6C7", size=13, text_align="center")
                     )
                 else:
-                    for g in gastos:
+                    for idx_card, g in enumerate(gastos):
+                        colores_tarjetas = ["#FE7A5C", "#7D81F7", "#FED34A", "#A0E7E5", "#F2BAC9"]
+                        color_bg = colores_tarjetas[idx_card % len(colores_tarjetas)]
+
                         def make_delete_handler(gasto=g):
                             def handle_delete(e):
                                 st.value = f"🗑️ Eliminando '{gasto['detalle']}'..."
@@ -1479,12 +1362,8 @@ def main(page: ft.Page):
                                 page.update()
                                 try:
                                     eliminar_gasto(
-                                        ss_id,
-                                        gasto["tarjeta"],
-                                        gasto["fecha"],
-                                        gasto["detalle"],
-                                        gasto["monto"],
-                                        gasto["responsable"]
+                                        gasto["id"],
+                                        ss_id
                                     )
                                     st.value = "✅ ¡Gasto eliminado!"
                                     st.color = "#4CAF50"
@@ -1502,15 +1381,15 @@ def main(page: ft.Page):
                                     [
                                         ft.Column(
                                             [
-                                                ft.Text(f"{g['detalle']} - $ {g['monto']:.2f}", weight="bold", color="#FFFFFF", size=13),
-                                                ft.Text(f"{g['fecha']} | {g['tarjeta']} | {g['responsable']} | {g['cuotas']} c.", color="#C5C6C7", size=10),
+                                                ft.Text(f"{g['detalle']} - $ {g['monto']:.2f}", weight="bold", color="#121212", size=13),
+                                                ft.Text(f"{g['fecha']} | {g['tarjeta']} | {g['responsable']} | {g['cuotas']} c.", color="#2D2D2D", size=10, weight="bold"),
                                             ],
                                             spacing=2,
                                             expand=True
                                         ),
                                         ft.IconButton(
                                             ft.icons.Icons.DELETE,
-                                            icon_color="#FF4C4C",
+                                            icon_color="#121212",
                                             icon_size=18,
                                             on_click=make_delete_handler(g),
                                             tooltip="Eliminar este gasto"
@@ -1518,10 +1397,10 @@ def main(page: ft.Page):
                                     ],
                                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                                 ),
-                                bgcolor="#151B24",
-                                padding=10,
-                                border_radius=8,
-                                border=ft.Border.all(0.5, "#45A29E")
+                                bgcolor=color_bg,
+                                padding=12,
+                                border_radius=14,
+                                border=ft.Border.all(1, "#2D2D2D")
                             )
                         )
                 page.update()
@@ -1529,6 +1408,21 @@ def main(page: ft.Page):
                 recent_list.controls = [
                     ft.Text(f"Error al cargar gastos: {str(ex)}", color="#FF4C4C", size=12, text_align="center")
                 ]
+                page.update()
+
+        def click_sync(e):
+            st.value = "⏳ Sincronizando con Google Sheets..."
+            st.color = "#66FCF1"
+            page.update()
+            try:
+                sincronizar_supabase_a_sheets(ss_id)
+                st.value = "✅ ¡Planilla sincronizada correctamente!"
+                st.color = "#4CAF50"
+                page.update()
+                click_refresh(None)
+            except Exception as ex:
+                st.value = f"❌ Error al sincronizar: {str(ex)}"
+                st.color = "#FF4C4C"
                 page.update()
 
         def logout_click(e):
@@ -1552,12 +1446,12 @@ def main(page: ft.Page):
             [
                 ft.Row(
                     [
-                        ft.Icon(ft.icons.Icons.CREDIT_CARD, color="#66FCF1", size=32),
+                        ft.Icon(ft.icons.Icons.CREDIT_CARD, color="#FE7A5C", size=32),  # Coral card icon
                         ft.Text(
                             "Tarjetita 2.0",
                             size=24,
                             weight=ft.FontWeight.BOLD,
-                            color="#66FCF1"
+                            color="#FFFFFF"
                         ),
                     ],
                     alignment=ft.MainAxisAlignment.CENTER,
@@ -1565,7 +1459,7 @@ def main(page: ft.Page):
                 ),
                 ft.Row(
                     [
-                        ft.Text(f"Planilla: {email}", size=11, color="#45A29E", expand=True, overflow=ft.TextOverflow.ELLIPSIS),
+                        ft.Text(f"Planilla: {email}", size=11, color="#8E8E93", expand=True, overflow=ft.TextOverflow.ELLIPSIS),
                         ft.IconButton(
                             ft.icons.Icons.LOGOUT,
                             icon_color="#FF4C4C",
@@ -1577,7 +1471,7 @@ def main(page: ft.Page):
                     ],
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 ),
-                ft.Divider(color="#45A29E", thickness=1, height=10),
+                ft.Divider(color="#2D2D2D", thickness=1, height=10),
                 
                 form_grid,
                 
@@ -1586,12 +1480,12 @@ def main(page: ft.Page):
                 ft.ElevatedButton(
                     content=ft.Row(
                         [
-                            ft.Icon(ft.icons.Icons.CLOUD_UPLOAD, color="#0B0C10", size=24),
+                            ft.Icon(ft.icons.Icons.CLOUD_UPLOAD, color="#121212", size=24),
                             ft.Text(
                                 "CARGAR GASTO",
                                 weight=ft.FontWeight.BOLD,
                                 size=15,
-                                color="#0B0C10"
+                                color="#121212"
                             ),
                         ],
                         alignment=ft.MainAxisAlignment.CENTER,
@@ -1601,29 +1495,37 @@ def main(page: ft.Page):
                     width=360,
                     height=50,
                     style=ft.ButtonStyle(
-                        bgcolor={"": "#66FCF1", "hovered": "#45A29E"},
-                        shape=ft.RoundedRectangleBorder(radius=10),
-                        elevation={"": 4, "hovered": 8},
+                        bgcolor={"": "#FE7A5C", "hovered": "#E0684C"},  # Coral button
+                        shape=ft.RoundedRectangleBorder(radius=14),
+                        color={"": "#121212"},
+                        elevation={"": 2, "hovered": 4},
                     ),
                 ),
                 
                 st,
                 
-                ft.Divider(color="#45A29E", thickness=1, height=15),
+                ft.Divider(color="#2D2D2D", thickness=1, height=15),
 
                 ft.Row(
                     [
                         ft.Column(
                             [
-                                ft.Text("ÚLTIMOS 5 GASTOS", size=13, weight="bold", color="#66FCF1"),
-                                ft.Text("Toca 🗑️ para eliminar", size=10, color="#45A29E"),
+                                ft.Text("ÚLTIMOS 5 GASTOS", size=13, weight="bold", color="#FE7A5C"),  # Coral accent
+                                ft.Text("Toca 🗑️ para eliminar", size=10, color="#8E8E93"),
                             ],
                             spacing=1,
                             expand=True,
                         ),
                         ft.IconButton(
+                            ft.icons.Icons.SYNC,
+                            icon_color="#FE7A5C",
+                            icon_size=20,
+                            on_click=click_sync,
+                            tooltip="Resincronizar Planilla"
+                        ),
+                        ft.IconButton(
                             ft.icons.Icons.REFRESH,
-                            icon_color="#66FCF1",
+                            icon_color="#FE7A5C",
                             icon_size=20,
                             on_click=click_refresh,
                             tooltip="Actualizar lista"

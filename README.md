@@ -8,7 +8,7 @@ La app se sincroniza automáticamente en la nube con un **Dashboard Ejecutivo en
 
 ## 🚀 Características Principales
 
-* 📱 **Experiencia Móvil y Responsiva:** Interfaz en modo oscuro (*Midnight Dark + Electric Teal*) optimizada para dispositivos Android y escritorio con diseño reactivo.
+* 📱 **Experiencia Móvil y Responsiva:** Interfaz en estilo *Neo-Brutalista* (*Sage Green, Deep Charcoal, Coral y Lavanda*) optimizada para dispositivos Android y escritorio con diseño reactivo.
 * 📊 **Sincronización Cloud Automática:** Generación e inyección dinámica de datos directamente en tu propia planilla de Google Sheets sin depender de servidores externos.
 * 🧮 **Parseador Inteligente de Montos:** Acepta formatos numéricos hispanos e internacionales (`1.500,50`, `1500.50`, etc.) de forma transparente.
 * 📅 **Gestión Dinámica de Años y Cuotas:** Distribución automática de compras en cuotas a través de bucles dinámicos que se expanden a años futuros (`datetime.now().year`) sin límites fijos.
@@ -86,10 +86,10 @@ Para que la app pueda interactuar con Google Sheets:
 <table>
   <tr>
     <td align="center">
-      <img width="300" alt="Vista Mobile 1" src="https://github.com/user-attachments/assets/26511167-e89d-46dd-8c76-af4c5b5fe1c8" />
+      <img width="300" alt="Vista Mobile 1 - Vincular" src="screenshots/vincular.png" />
     </td>
     <td align="center">
-      <img width="300" alt="Vista Mobile 2" src="https://github.com/user-attachments/assets/40616e0f-44de-414e-84de-3a996481a5c7" />
+      <img width="300" alt="Vista Mobile 2 - Cargar" src="screenshots/cargar.png" />
     </td>
   </tr>
 </table>

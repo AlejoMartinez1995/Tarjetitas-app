@@ -57,29 +57,99 @@ def obtener_consejo_ia(api_key, gastos_lista):
         f"Gastos actuales:\n{resumen_txt}"
     )
     
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
-    headers = {"Content-Type": "application/json"}
-    payload = {
-        "contents": [{
-            "parts": [{"text": prompt}]
-        }]
-    }
-    
+    api_key = api_key.strip()
+
+    # Paso 1: Consultar la lista dinámica de modelos disponibles mediante ListModels (Recomendado oficialmente por Google)
+    available_models = []
     try:
-        response = requests.post(url, json=payload, headers=headers, timeout=15)
-        if response.status_code == 200:
-            data = response.json()
-            try:
-                parts = data["candidates"][0]["content"]["parts"]
+        list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+        res = requests.get(list_url, timeout=8)
+        if res.status_code == 200:
+            data = res.json().get("models", [])
+            for m in data:
+                methods = m.get("supportedGenerationMethods", [])
+                if "generateContent" in methods:
+                    m_name = m.get("name")
+                    if m_name:
+                        available_models.append(m_name)
+    except Exception:
+        pass
+
+    # Respaldos en caso de que ListModels no esté disponible
+    if not available_models:
+        available_models = [
+            "models/gemini-1.5-flash",
+            "models/gemini-2.0-flash",
+            "models/gemini-2.5-flash",
+            "models/gemini-1.0-pro"
+        ]
+
+    # Paso 2: Ejecutar la consulta probando los modelos obtenidos de Google
+    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+    headers = {"Content-Type": "application/json"}
+    last_err = ""
+    last_code = 404
+
+    for m_full_name in available_models:
+        clean_name = m_full_name if m_full_name.startswith("models/") else f"models/{m_full_name}"
+        
+        # Intento A: Parámetro ?key= en v1beta
+        url_param = f"https://generativelanguage.googleapis.com/v1beta/{clean_name}:generateContent?key={api_key}"
+        try:
+            r = requests.post(url_param, json=payload, headers=headers, timeout=8)
+            last_code = r.status_code
+            if r.status_code == 200:
+                parts = r.json()["candidates"][0]["content"]["parts"]
                 if parts:
                     return parts[0]["text"].strip()
-            except Exception:
-                pass
-            return "🤖 No pude generar una recomendación en este momento."
-        else:
-            return f"❌ Error de la API de Gemini (Status {response.status_code})"
-    except Exception as e:
-        return f"❌ Error al conectar con el asistente de IA: {str(e)}"
+            else:
+                try:
+                    last_err = r.json().get("error", {}).get("message", r.text)
+                except Exception:
+                    last_err = r.text[:150]
+        except Exception as e:
+            last_err = str(e)
+
+        # Intento B: Cabecera x-goog-api-key en v1beta
+        url_header = f"https://generativelanguage.googleapis.com/v1beta/{clean_name}:generateContent"
+        headers_with_key = {"Content-Type": "application/json", "x-goog-api-key": api_key}
+        try:
+            r = requests.post(url_header, json=payload, headers=headers_with_key, timeout=8)
+            last_code = r.status_code
+            if r.status_code == 200:
+                parts = r.json()["candidates"][0]["content"]["parts"]
+                if parts:
+                    return parts[0]["text"].strip()
+            else:
+                try:
+                    last_err = r.json().get("error", {}).get("message", r.text)
+                except Exception:
+                    last_err = r.text[:150]
+        except Exception as e:
+            last_err = str(e)
+
+    # Paso 3: Probar endpoint de OpenAI Compatibility si aún no se obtuvo respuesta
+    try:
+        openai_url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+        openai_headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
+        for m_short in ["gemini-1.5-flash", "gemini-2.0-flash"]:
+            openai_payload = {
+                "model": m_short,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 250
+            }
+            resp = requests.post(openai_url, json=openai_payload, headers=openai_headers, timeout=6)
+            if resp.status_code == 200:
+                choices = resp.json().get("choices", [])
+                if choices:
+                    return choices[0]["message"]["content"].strip()
+    except Exception:
+        pass
+
+    return f"❌ Error de Google ({last_code}): {last_err or 'No se encontró un modelo activo para esta clave.'}"
 
 
 
@@ -1472,46 +1542,88 @@ def main(page: ft.Page):
                 st.color = "#FF4C4C"
                 page.update()
 
-        def abrir_config_ia(e):
-            key_input = ft.TextField(
-                label="Gemini API Key",
-                value=storage.get("gemini_api_key") or "",
-                password=True,
-                can_reveal_password=True,
-                **input_style
-            )
-            
-            def guardar_key(e):
-                storage.set("gemini_api_key", key_input.value.strip())
-                page.close(dlg)
-                st.value = "✅ ¡API Key de Gemini guardada!"
-                st.color = "#4CAF50"
-                page.update()
-                
-            dlg = ft.AlertDialog(
-                title=ft.Text("Configuración de Asistente IA 🤖", color="#FFFFFF", size=16, weight="bold"),
-                content=ft.Column(
-                    [
-                        ft.Text("Ingresá tu API Key de Gemini para recibir sugerencias y análisis financiero personalizado.", size=12, color="#8E8E93"),
-                        key_input,
-                        ft.TextButton(
-                            "Obtener API Key gratis en Google AI Studio",
-                            url="https://aistudio.google.com/",
-                            style=ft.ButtonStyle(color="#7D81F7")
+        # Tarjeta inline de Configuración de Asistente IA (Neo-Brutalista)
+        gemini_key_input = ft.TextField(
+            label="Gemini API Key",
+            value=storage.get("gemini_api_key") or "",
+            password=True,
+            can_reveal_password=True,
+            **input_style
+        )
+        
+        def guardar_key(e):
+            storage.set("gemini_api_key", gemini_key_input.value.strip())
+            config_ia_card.visible = False
+            st.value = "✅ ¡API Key de Gemini guardada!"
+            st.color = "#4CAF50"
+            page.update()
+
+        def cancelar_config_ia(e):
+            config_ia_card.visible = False
+            page.update()
+
+        config_ia_card = ft.Container(
+            content=ft.Column(
+                [
+                    ft.Row(
+                        [
+                            ft.Icon(ft.icons.Icons.AUTO_AWESOME, color="#FED34A", size=20),
+                            ft.Text("Configurar Asistente IA 🤖", color="#FFFFFF", size=14, weight="bold", expand=True),
+                            ft.IconButton(
+                                ft.icons.Icons.CLOSE,
+                                icon_color="#FF4C4C",
+                                icon_size=18,
+                                on_click=cancelar_config_ia,
+                                tooltip="Cerrar"
+                            )
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+                    ),
+                    ft.Text(
+                        "Ingresá tu API Key de Gemini para recibir sugerencias y análisis financiero personalizado.",
+                        size=12,
+                        color="#8E8E93"
+                    ),
+                    gemini_key_input,
+                    ft.TextButton(
+                        "🔗 Obtener API Key gratis en Google AI Studio",
+                        url="https://aistudio.google.com/",
+                        style=ft.ButtonStyle(color={"": "#7D81F7"})
+                    ),
+                    ft.ElevatedButton(
+                        content=ft.Row(
+                            [
+                                ft.Icon(ft.icons.Icons.SAVE, color="#FFFFFF", size=20),
+                                ft.Text("GUARDAR CLAVE", weight=ft.FontWeight.BOLD, color="#FFFFFF", size=14)
+                            ],
+                            alignment=ft.MainAxisAlignment.CENTER,
+                            spacing=8
+                        ),
+                        on_click=guardar_key,
+                        style=ft.ButtonStyle(
+                            bgcolor={"": "#4CAF50"},
+                            shape=ft.RoundedRectangleBorder(radius=12)
                         )
-                    ],
-                    spacing=12,
-                    height=180,
-                    width=300
-                ),
-                actions=[
-                    ft.TextButton("Cancelar", on_click=lambda e: page.close(dlg), style=ft.ButtonStyle(color="#FF4C4C")),
-                    ft.ElevatedButton("Guardar", on_click=guardar_key, style=ft.ButtonStyle(bgcolor="#4CAF50", color="#FFFFFF"))
+                    )
                 ],
-                bgcolor="#121212",
-                shape=ft.RoundedRectangleBorder(radius=18),
-            )
-            page.open(dlg)
+                spacing=10
+            ),
+            bgcolor="#1E1E1E",
+            padding=16,
+            border_radius=14,
+            border=ft.Border(
+                top=ft.BorderSide(1, "#FED34A"),
+                bottom=ft.BorderSide(1, "#FED34A"),
+                left=ft.BorderSide(1, "#FED34A"),
+                right=ft.BorderSide(1, "#FED34A")
+            ),
+            visible=False
+        )
+
+        def abrir_config_ia(e=None):
+            gemini_key_input.value = storage.get("gemini_api_key") or ""
+            config_ia_card.visible = not config_ia_card.visible
+            page.update()
 
         ai_response_txt = ft.Text(
             "Acá aparecerá el análisis del Asistente IA...",
@@ -1630,23 +1742,22 @@ def main(page: ft.Page):
                         ft.IconButton(
                             ft.icons.Icons.AUTO_AWESOME,
                             icon_color="#FED34A",
-                            icon_size=16,
+                            icon_size=24,
                             on_click=abrir_config_ia,
-                            tooltip="Configurar Asistente IA",
-                            padding=0
+                            tooltip="Configurar Asistente IA"
                         ),
                         ft.IconButton(
                             ft.icons.Icons.LOGOUT,
                             icon_color="#FF4C4C",
-                            icon_size=16,
+                            icon_size=24,
                             on_click=logout_click,
-                            tooltip="Cambiar de cuenta/planilla",
-                            padding=0
+                            tooltip="Cambiar de cuenta/planilla"
                         )
                     ],
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 ),
                 ft.Divider(color="#2D2D2D", thickness=1, height=10),
+                config_ia_card,
                 
                 form_grid,
                 

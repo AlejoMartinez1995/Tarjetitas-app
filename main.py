@@ -640,18 +640,19 @@ def formatear_y_totalizar(sheet, tarjeta):
     if batch_values:
         sheet.batch_update(batch_values, value_input_option="USER_ENTERED")
 
-    # Inyectar gráficos dinámicos en Google Sheets (Panel lateral derecho a partir de Columna W)
+    # Inyectar gráficos dinámicos en Google Sheets (Debajo del bloque MASTERCARD, visibles en pantalla)
     try:
-        if tarjeta.upper() == "VISA":
-            agregar_graficos_dashboard(sheet, filas_total, tarjeta=tarjeta)
+        if tarjeta.upper() == "MASTERCARD":
+            chart_row_start = filas_total[-1] + 2  # 3 filas debajo de TOTAL MASTERCARD (0-indexed)
+            agregar_graficos_dashboard(sheet, filas_total, chart_row_start, tarjeta=tarjeta)
     except Exception as err_chart:
         print(f"Nota al inyectar gráficos en Sheets: {err_chart}")
 
 
-def agregar_graficos_dashboard(sheet, filas_total, tarjeta="VISA"):
+def agregar_graficos_dashboard(sheet, filas_total, chart_row_start=16, tarjeta="MASTERCARD"):
     """
     Inyecta mediante batch_update (addChart):
-    - Ubicación: Panel lateral derecho estático (Columna W, índice 22) para evitar cualquier superposición con las tablas.
+    - Ubicación: Debajo de las tablas de tarjetas (Filas 17+), visible entre Columnas B e I sin necesidad de scroll horizontal.
     1. Gráfico de Torta (Share de Responsabilidad): % de deuda por usuario (Alejo vs Lu).
     2. Gráfico de Columnas (Proyección Acumulada de Cuotas por Mes).
     """
@@ -663,7 +664,7 @@ def agregar_graficos_dashboard(sheet, filas_total, tarjeta="VISA"):
     fila_general = filas_total[-1] - 1
     
     requests = [
-        # 1. Gráfico de Torta (Share por Responsable) -> Columna W, Fila 3 (Index 22, 2)
+        # 1. Gráfico de Torta (Share por Responsable) -> Columna B (Index 1), Fila chart_row_start
         {
             "addChart": {
                 "chart": {
@@ -699,17 +700,17 @@ def agregar_graficos_dashboard(sheet, filas_total, tarjeta="VISA"):
                         "overlayPosition": {
                             "anchorCell": {
                                 "sheetId": sheet.id,
-                                "rowIndex": 2,
-                                "columnIndex": 22
+                                "rowIndex": chart_row_start,
+                                "columnIndex": 1
                             },
-                            "widthPixels": 480,
-                            "heightPixels": 290
+                            "widthPixels": 420,
+                            "heightPixels": 270
                         }
                     }
                 }
             }
         },
-        # 2. Gráfico de Barras (Proyección Acumulada de Cuotas a Futuro) -> Columna W, Fila 18 (Index 22, 17)
+        # 2. Gráfico de Barras (Proyección Acumulada de Cuotas a Futuro) -> Columna I (Index 8), Fila chart_row_start
         {
             "addChart": {
                 "chart": {
@@ -751,11 +752,11 @@ def agregar_graficos_dashboard(sheet, filas_total, tarjeta="VISA"):
                         "overlayPosition": {
                             "anchorCell": {
                                 "sheetId": sheet.id,
-                                "rowIndex": 17,
-                                "columnIndex": 22
+                                "rowIndex": chart_row_start,
+                                "columnIndex": 8
                             },
-                            "widthPixels": 580,
-                            "heightPixels": 310
+                            "widthPixels": 520,
+                            "heightPixels": 270
                         }
                     }
                 }
@@ -766,6 +767,7 @@ def agregar_graficos_dashboard(sheet, filas_total, tarjeta="VISA"):
         sheet.spreadsheet.batch_update({"requests": requests})
     except Exception as e:
         print(f"Nota: addChart omitido o no soportado en sandbox local: {e}")
+
 
 
 

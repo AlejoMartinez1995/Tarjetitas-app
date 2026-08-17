@@ -189,11 +189,12 @@ def formatear_y_totalizar(sheet, tarjeta):
 
     en_bloque = False
     for i, row in enumerate(data):
-        row_str = " ".join(row).upper()
-        if tarjeta.upper() in row_str and "TOTAL" not in row_str:
+        col_a = row[0].strip().upper() if len(row) > 0 else ""
+        if col_a == tarjeta.upper() and not en_bloque:
             en_bloque = True
             inicio_bloque = i + 2  # primera fila de datos (1-indexed)
             filas_total = []
+
         elif en_bloque:
             val_d = row[3].strip().upper() if len(row) > 3 else ""
             val_a = row[0].strip().upper() if len(row) > 0 else ""
@@ -499,7 +500,38 @@ def formatear_y_totalizar(sheet, tarjeta):
                 }
             )
 
+            # Formatear Columna G (Total en Fila de Totales - index 6 a 7)
+            requests.append(
+                {
+                    "repeatCell": {
+                        "range": {
+                            "sheetId": sheet.id,
+                            "startRowIndex": idx,
+                            "endRowIndex": r,
+                            "startColumnIndex": 6,
+                            "endColumnIndex": 7,
+                        },
+                        "cell": {
+                            "userEnteredFormat": {
+                                "backgroundColor": color_total,
+                                "horizontalAlignment": "CENTER",
+                                "textFormat": text_format_total,
+                                "numberFormat": {"type": "CURRENCY", "pattern": '"$" #,##0.00'},
+                                "borders": {
+                                    "top": {"style": "SOLID"},
+                                    "bottom": {"style": estilo_borde_inf},
+                                    "left": {"style": "SOLID"},
+                                    "right": {"style": "SOLID"},
+                                },
+                            }
+                        },
+                        "fields": "userEnteredFormat(backgroundColor,horizontalAlignment,textFormat,numberFormat,borders)",
+                    }
+                }
+            )
+
             # Formatear Columnas J a U (Meses - index 9 a 21)
+
             requests.append(
                 {
                     "repeatCell": {
@@ -553,6 +585,11 @@ def formatear_y_totalizar(sheet, tarjeta):
                             "userEnteredFormat": {
                                 "backgroundColor": color,
                                 "horizontalAlignment": "CENTER",
+                                "textFormat": {
+                                    "fontSize": 9,
+                                    "bold": False,
+                                    "foregroundColor": {"red": 0.08, "green": 0.17, "blue": 0.24},
+                                },
                                 "borders": {
                                     "top": {"style": "SOLID"},
                                     "bottom": {"style": "SOLID"},
@@ -561,7 +598,8 @@ def formatear_y_totalizar(sheet, tarjeta):
                                 },
                             }
                         },
-                        "fields": "userEnteredFormat(backgroundColor,horizontalAlignment,borders)",
+                        "fields": "userEnteredFormat(backgroundColor,horizontalAlignment,textFormat,borders)",
+
                     }
                 }
             )
@@ -612,7 +650,9 @@ def formatear_y_totalizar(sheet, tarjeta):
         # Obtener el nombre del responsable desde 'TOTAL [NOMBRE]'
         nombre = cell_val.replace("TOTAL", "").strip()
 
+
         for col_idx in range(10, 22):
+
             letra = chr(64 + col_idx)
             # =SUMIF($D$data_start:$D$data_end; "NOMBRE"; letra$data_start:letra$data_end)
             if data_end >= data_start:
@@ -621,27 +661,23 @@ def formatear_y_totalizar(sheet, tarjeta):
                 formula = 0.0
             batch_values.append({"range": f"{letra}{fila_t}", "values": [[formula]]})
 
-
         # FÓRMULA DEL TOTAL ACUMULADO DEL RESPONSABLE EN COLUMNA G (TOTAL) PARA EL GRÁFICO DE TORTA
         formula_sum_persona = f"=SUM(J{fila_t}:U{fila_t})"
         batch_values.append({"range": f"G{fila_t}", "values": [[formula_sum_persona]]})
 
-
-    # Escribir fórmula SUM para la fila final de total general
+    # Escribir fórmula SUM para la fila final de total general (Columnas J a U y Columna G)
     fila_general = filas_total[-1]
     if len(filas_total) > 1:
         fila_totales_inicio = filas_total[0]
         fila_totales_fin = filas_total[-2]
         for col_idx in range(10, 22):
             letra = chr(64 + col_idx)
-            # =SUM(letra_totales_inicio:letra_totales_fin)
             formula = f"=SUM({letra}{fila_totales_inicio}:{letra}{fila_totales_fin})"
             batch_values.append({"range": f"{letra}{fila_general}", "values": [[formula]]})
         
         formula_sum_general = f"=SUM(J{fila_general}:U{fila_general})"
         batch_values.append({"range": f"G{fila_general}", "values": [[formula_sum_general]]})
     else:
-        # Solo hay una fila de total general y no hay gastos ni otros totales. Escribir 0.0
         for col_idx in range(10, 22):
             letra = chr(64 + col_idx)
             batch_values.append({"range": f"{letra}{fila_general}", "values": [[0.0]]})
@@ -650,24 +686,43 @@ def formatear_y_totalizar(sheet, tarjeta):
     if batch_values:
         sheet.batch_update(batch_values, value_input_option="USER_ENTERED")
 
-    # Inyectar gráficos dinámicos en Google Sheets (Debajo del bloque MASTERCARD a partir de la Fila 20+)
+
+    # Inyectar gráficos dinámicos en Google Sheets (Tanto para VISA como para MASTERCARD)
     try:
-        if tarjeta.upper() == "MASTERCARD":
-            chart_row_start = filas_total[-1] + 2  # Se ubica 3 filas debajo de TOTAL MASTERCARD (0-indexed)
-            agregar_graficos_dashboard(sheet, filas_total, chart_row_start, tarjeta=tarjeta)
+        chart_row_start = filas_total[-1] + 1  # 2 filas debajo del total (0-indexed)
+        borrar_viejos = (tarjeta.upper() == "VISA")
+        agregar_graficos_dashboard(sheet, data_start, data_end, filas_total, chart_row_start, tarjeta=tarjeta, borrar_viejos=borrar_viejos)
     except Exception as err_chart:
         print(f"Nota al inyectar gráficos en Sheets: {err_chart}")
 
 
-def agregar_graficos_dashboard(sheet, filas_total, chart_row_start=19, tarjeta="MASTERCARD"):
+def borrar_graficos_existentes(sheet):
+    try:
+        url = f"https://sheets.googleapis.com/v4/spreadsheets/{sheet.spreadsheet.id}?fields=sheets(charts,properties)"
+        res = sheet.spreadsheet.client.request("get", url).json()
+        for s in res.get("sheets", []):
+            if s.get("properties", {}).get("sheetId") == sheet.id:
+                charts = s.get("charts", [])
+                if charts:
+                    del_reqs = [{"deleteEmbeddedObject": {"objectId": c["chartId"]}} for c in charts]
+                    sheet.spreadsheet.batch_update({"requests": del_reqs})
+    except Exception as e:
+        print(f"Nota al borrar gráficos previos: {e}")
+
+
+def agregar_graficos_dashboard(sheet, data_start, data_end, filas_total, chart_row_start=19, tarjeta="MASTERCARD", borrar_viejos=False):
     """
     Inyecta mediante batch_update (addChart):
-    - Ubicación: Debajo de las tablas de tarjetas (Filas 20+), visible entre Columnas B e I sin superponerse.
+    - Ubicación: Debajo de la tabla correspondiente (VISA o MASTERCARD), entre Columnas B e I.
     1. Gráfico de Torta (Share de Responsabilidad): % de deuda por usuario (Alejo vs Lu).
     2. Gráfico de Columnas (Proyección Acumulada de Cuotas por Mes).
     """
     if not filas_total or len(filas_total) < 2:
         return
+
+    # Borrar gráficos viejos sólo en la primera pasada (VISA)
+    if borrar_viejos:
+        borrar_graficos_existentes(sheet)
         
     start_total = filas_total[0] - 1
     end_total = filas_total[-2]
@@ -675,6 +730,7 @@ def agregar_graficos_dashboard(sheet, filas_total, chart_row_start=19, tarjeta="
     
     requests = [
         # 1. Gráfico de Torta (Share por Responsable) -> Columna B (Index 1), Fila chart_row_start
+        # Se toma directamente de la tabla de totales (start_total a end_total) para que no se repitan nombres
         {
             "addChart": {
                 "chart": {
@@ -690,7 +746,6 @@ def agregar_graficos_dashboard(sheet, filas_total, chart_row_start=19, tarjeta="
                                         "endRowIndex": end_total,
                                         "startColumnIndex": 3,
                                         "endColumnIndex": 4
-
                                     }]
                                 }
                             },
@@ -710,6 +765,7 @@ def agregar_graficos_dashboard(sheet, filas_total, chart_row_start=19, tarjeta="
                     "position": {
                         "overlayPosition": {
                             "anchorCell": {
+
                                 "sheetId": sheet.id,
                                 "rowIndex": chart_row_start,
                                 "columnIndex": 1
@@ -722,6 +778,7 @@ def agregar_graficos_dashboard(sheet, filas_total, chart_row_start=19, tarjeta="
             }
         },
         # 2. Gráfico de Barras (Proyección Acumulada de Cuotas a Futuro) -> Columna I (Index 8), Fila chart_row_start
+
         {
             "addChart": {
                 "chart": {
@@ -1115,9 +1172,10 @@ def reestructurar_hoja_completa_desde_db(sheet, año, db_gastos):
         nuevas_filas.append(["", "", "", f"TOTAL {nombre.upper()}"] + [""] * 17)
     nuevas_filas.append(["", "", "", "TOTAL VISA"] + [""] * 17)
     
-    # Separador amplio entre VISA y MASTERCARD
-    nuevas_filas.append([""] * 21)
-    nuevas_filas.append([""] * 21)
+    # Separación amplia para alojar cómodamente los gráficos de VISA entre ambas tablas
+    for _ in range(16):
+        nuevas_filas.append([""] * 21)
+
 
     
     # --- Reconstruir MASTERCARD ---

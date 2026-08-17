@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tarjetitas 2.0 — Live Interactive Showcase & Emulator</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Ambient Background Blobs -->
+  <div class="ambient-bg">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+  </div>
+
+  <!-- Navbar -->
+  <nav class="navbar">
+    <a href="#" class="logo">
+      <div class="logo-icon">💳</div>
+      <span>Tarjetitas 2.0</span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="#heroSection">Inicio</a></li>
+      <li><a href="#instructivo">Instructivo & Arquitectura</a></li>
+      <li><a href="#sandbox">Live Playground</a></li>
+    </ul>
+    <a href="https://github.com/AlejoMartinez1995/Tarjetitas-app" target="_blank" class="btn-nav">
+      ⭐ GitHub Repo
+    </a>
+  </nav>
+
+  <!-- SECTION 1: HERO & DRIBBBLE UNLOCK EFFECT -->
+  <section class="hero-section" id="heroSection">
+    <div class="container">
+      <div class="hero-wrapper">
+
+        <!-- Hero Content (Revealed upon unlock) -->
+        <div class="hero-content" id="heroContent">
+          <div class="badge">🚀 CONTROL FINANCIERO INTELIGENTE</div>
+          <h1 class="hero-title">Gastar sin perder la cabeza con <span>las cuotas</span>.</h1>
+          <p class="hero-description">
+            ¿Te pasa que cargás gastos con tarjeta de crédito en 3, 6 o 12 cuotas y perdés el control de lo que vas a pagar el mes que viene? 
+            <strong>Tarjetitas 2.0</strong> sincroniza tus consumos en tiempo real con Google Sheets, Supabase y un Asistente IA que analiza tu presupuesto.
+          </p>
+
+          <div class="feature-pills">
+            <div class="pill">🛡️ Multitenant RLS</div>
+            <div class="pill">🔄 Self-Healing Sheets</div>
+            <div class="pill">🤖 Gemini 2.0/2.5 AI</div>
+            <div class="pill">🍕 Gráficos de Torta & Cuotas</div>
+          </div>
+
+          <div class="hero-ctas">
+            <a href="#sandbox" class="btn-primary">
+              ⚡ Probar Live Playground
+            </a>
+            <a href="#instructivo" class="btn-secondary">
+              📖 Ver Arquitectura
+            </a>
+          </div>
+        </div>
+
+        <!-- Phone Mockup (Locked State -> Unlocked State) -->
+        <div class="phone-container locked-state" id="phoneContainer">
+          <div class="phone-mockup" id="phoneMockup">
+            
+            <!-- Dynamic Island Notch -->
+            <div class="notch">
+              <div class="notch-speaker"></div>
+              <div class="notch-camera"></div>
+            </div>
+
+            <div class="phone-screen">
+              <!-- Lock Screen Overlay -->
+              <div class="lock-screen" id="lockScreen">
+                <div class="lock-clock">
+                  <div class="lock-time" id="lockTime">12:42</div>
+                  <div class="lock-date" id="lockDate">Lunes, 17 de Agosto</div>
+                </div>
+
+                <div class="lock-cta-wrapper">
+                  <button class="lock-pulse-btn" id="lockPulseBtn" aria-label="Desbloquear">
+                    🔓
+                  </button>
+                  <div class="lock-cta-text">¿VAMOS?</div>
+                  <div class="lock-subtext">Tocá para desbloquear el emulador</div>
+                </div>
+
+                <div style="height: 10px;"></div>
+              </div>
+
+              <!-- Unlocked App Screen (PWA Demo) -->
+              <div class="app-screen">
+                <div class="mini-header">
+                  <div class="mini-title">💳 Tarjetita 2.0</div>
+                  <div style="font-size: 0.75rem; color: var(--gold);">✨ IA Ready</div>
+                </div>
+
+                <div class="mini-form">
+                  <div class="mini-input-group">
+                    <label class="mini-label">Tarjeta</label>
+                    <div class="mini-select">VISA</div>
+                  </div>
+                  <div class="mini-input-group">
+                    <label class="mini-label">Detalle de compra</label>
+                    <div class="mini-input">Horno Eléctrico</div>
+                  </div>
+                  <div style="display: flex; gap: 8px;">
+                    <div class="mini-input-group" style="flex: 7;">
+                      <label class="mini-label">Monto Total</label>
+                      <div class="mini-input">$ 250.000</div>
+                    </div>
+                    <div class="mini-input-group" style="flex: 5;">
+                      <label class="mini-label">Cuotas</label>
+                      <div class="mini-input">3</div>
+                    </div>
+                  </div>
+                  <button class="mini-btn-cargar" type="button">
+                    ☁️ CARGAR GASTO
+                  </button>
+                  <button class="mini-btn-ia" type="button">
+                    ✨ PREGUNTAR A LA IA
+                  </button>
+                </div>
+
+                <div class="mini-ai-card">
+                  <div class="mini-ai-title">✨ ASISTENTE FINANCIERO IA</div>
+                  <div>"¡Ojo con las cuotas! Tenés 3 compras cargadas. Presupuesto saludable."</div>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 2: INSTRUCTIVO / INTEGRATION GUIDE -->
+  <section class="section-padding" id="instructivo">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-subtitle">Paso a Paso & Arquitectura</div>
+        <h2 class="section-title">¿Cómo se conecta todo en segundo plano?</h2>
+      </div>
+
+      <div class="instructivo-grid">
+        <!-- Step 1 -->
+        <div class="instructivo-card">
+          <div class="step-number">01</div>
+          <h3>Google Sheets + Service Account</h3>
+          <p>
+            La app no requiere contraseñas de Google Drive. Se conecta de forma 100% silenciosa y segura mediante una <strong>Cuenta de Servicio (Service Account)</strong> en JSON, escribiendo en lotes (batch update) directamente sobre tu planilla maestro.
+          </p>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="instructivo-card">
+          <div class="step-number">02</div>
+          <h3>Asistente IA con Gemini Studio</h3>
+          <p>
+            Al ingresar tu Gemini API Key (obtenida gratis en Google AI Studio), el asistente analiza tu lista de compras registradas en Supabase y te brinda una recomendación financiera personalizada con humor y modismos argentinos.
+          </p>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="instructivo-card">
+          <div class="step-number">03</div>
+          <h3>Motor de Resiliencia (Self-Healing)</h3>
+          <p>
+            Si alterás o rompés accidentalmente las fórmulas o celdas de la planilla, la aplicación lo detecta al instante, elimina la pestaña corrupta, la recrea y vuelve a volcar todos tus gastos guardados en Supabase en menos de 800ms.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 3: LIVE PLAYGROUND / SPLIT-VIEW DEMO -->
+  <section class="section-padding playground-section" id="sandbox">
+    <div class="container">
+      
+      <div class="playground-wrapper">
+        <div class="playground-header">
+          <div class="playground-title">
+            <span>⚡ Live Interactive Playground & Emulator</span>
+          </div>
+          <button class="btn-reset" id="btnResetDemo">
+            🔄 Reiniciar Demostración
+          </button>
+        </div>
+
+        <!-- Left Emulator Form -->
+        <div class="simulator-panel">
+          <div class="panel-tag">📱 Emulador PWA (Interactivo)</div>
+          
+          <form id="sandboxForm">
+            <div class="mini-input-group" style="margin-bottom: 12px;">
+              <label class="mini-label">Tarjeta</label>
+              <select class="mini-select" id="sbTarjeta">
+                <option value="VISA">VISA</option>
+                <option value="MASTERCARD">MASTERCARD</option>
+                <option value="AMEX">AMEX</option>
+              </select>
+            </div>
+
+            <div class="mini-input-group" style="margin-bottom: 12px;">
+              <label class="mini-label">Detalle de compra</label>
+              <input type="text" class="mini-input" id="sbDetalle" placeholder="Ej: Supermercado, Horno, Zapatillas" required>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+              <div class="mini-input-group" style="flex: 7;">
+                <label class="mini-label">Monto Total ($)</label>
+                <input type="number" class="mini-input" id="sbMonto" placeholder="150000" required>
+              </div>
+              <div class="mini-input-group" style="flex: 5;">
+                <label class="mini-label">Cuotas</label>
+                <input type="number" class="mini-input" id="sbCuotas" value="1" min="1" max="24" required>
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+              <div class="mini-input-group" style="flex: 6;">
+                <label class="mini-label">Responsable</label>
+                <select class="mini-select" id="sbResponsable">
+                  <option value="Alejo">Alejo</option>
+                  <option value="Lu">Lu</option>
+                </select>
+              </div>
+              <div class="mini-input-group" style="flex: 6;">
+                <label class="mini-label">Mes Inicio</label>
+                <select class="mini-select" id="sbMes">
+                  <option value="Agosto">Agosto</option>
+                  <option value="Septiembre">Septiembre</option>
+                  <option value="Octubre">Octubre</option>
+                </select>
+              </div>
+            </div>
+
+            <button type="submit" class="mini-btn-cargar" style="width: 100%; margin-bottom: 8px;">
+              ☁️ CARGAR GASTO EN VIVO
+            </button>
+
+            <button type="button" class="mini-btn-ia" id="sbBtnAI" style="width: 100%;">
+              ✨ PREGUNTAR AL ASISTENTE IA
+            </button>
+          </form>
+
+          <div class="mini-ai-card" id="sbAiResponse" style="display: none;">
+            <div class="mini-ai-title">✨ ASISTENTE FINANCIERO IA</div>
+            <div>Esperando análisis...</div>
+          </div>
+        </div>
+
+        <!-- Right Live Google Sheets Grid Panel -->
+        <div class="sheets-panel">
+          <div class="sheets-topbar">
+            <div class="sheets-filename">
+              📊 Planilla_Gastos_2026.xlsx (Google Sheets Live View)
+            </div>
+            <div class="live-badge">
+              <div class="live-dot"></div>
+              <span>Sincronizado</span>
+            </div>
+          </div>
+
+          <div class="table-container">
+            <table class="sheets-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Detalle de Compra</th>
+                  <th>Monto Total</th>
+                  <th>Cuotas</th>
+                  <th>Responsable</th>
+                  <th>Tarjeta</th>
+                  <th>Mes Inicio</th>
+                </tr>
+              </thead>
+              <tbody id="sheetsTbody">
+                <!-- Dynamically populated by app.js -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Live Dashboard Charts (Torta + Barras de Cuotas) -->
+          <div class="charts-container">
+            <div class="chart-card">
+              <div class="chart-header">
+                <span class="chart-title">🍕 Share por Responsable (VISA)</span>
+                <span class="chart-subtitle">Distribución Deuda %</span>
+              </div>
+              <div class="pie-chart-wrapper">
+                <svg id="pieSvg" viewBox="0 0 160 160" class="pie-svg"></svg>
+                <div class="pie-legend" id="pieLegend"></div>
+              </div>
+            </div>
+
+            <div class="chart-card">
+              <div class="chart-header">
+                <span class="chart-title">📊 Proyección de Cuotas por Mes</span>
+                <span class="chart-subtitle">Mes Pico en Coral</span>
+              </div>
+              <div class="bar-chart-wrapper" id="barWrapper"></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <p>Tarjetitas 2.0 — Desarrollado con Python, Flet, Supabase & Google Cloud API.</p>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

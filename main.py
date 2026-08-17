@@ -641,6 +641,126 @@ def formatear_y_totalizar(sheet, tarjeta):
         sheet.batch_update(batch_values, value_input_option="USER_ENTERED")
 
 
+def agregar_graficos_dashboard(sheet, filas_total, chart_row_start):
+    """
+    Inyecta mediante batch_update (addChart):
+    1. Gráfico de Torta (Share de Responsabilidad): % de deuda por usuario (Alejo vs Lu).
+    2. Gráfico de Columnas (Proyección Acumulada de Cuotas): Totales de cuotas por mes futuro.
+    """
+    if not filas_total or len(filas_total) < 2:
+        return
+        
+    start_total = filas_total[0] - 1
+    end_total = filas_total[-2]
+    fila_general = filas_total[-1] - 1
+    
+    requests = [
+        # 1. Gráfico de Torta (Share por Responsable)
+        {
+            "addChart": {
+                "chart": {
+                    "spec": {
+                        "title": "Share de Gastos por Responsable (VISA)",
+                        "pieChart": {
+                            "legendPosition": "RIGHT_LEGEND",
+                            "domain": {
+                                "sourceRange": {
+                                    "sources": [{
+                                        "sheetId": sheet.id,
+                                        "startRowIndex": start_total,
+                                        "endRowIndex": end_total,
+                                        "startColumnIndex": 3,
+                                        "endColumnIndex": 4
+                                    }]
+                                }
+                            },
+                            "series": {
+                                "sourceRange": {
+                                    "sources": [{
+                                        "sheetId": sheet.id,
+                                        "startRowIndex": start_total,
+                                        "endRowIndex": end_total,
+                                        "startColumnIndex": 9,
+                                        "endColumnIndex": 10
+                                    }]
+                                }
+                            }
+                        }
+                    },
+                    "position": {
+                        "overlayPosition": {
+                            "anchorCell": {
+                                "sheetId": sheet.id,
+                                "rowIndex": chart_row_start,
+                                "columnIndex": 1
+                            },
+                            "widthPixels": 420,
+                            "heightPixels": 260
+                        }
+                    }
+                }
+            }
+        },
+        # 2. Gráfico de Barras (Proyección Acumulada de Cuotas a Futuro)
+        {
+            "addChart": {
+                "chart": {
+                    "spec": {
+                        "title": "Proyección Acumulada de Cuotas por Mes",
+                        "basicChart": {
+                            "chartType": "COLUMN",
+                            "legendPosition": "NO_LEGEND",
+                            "domains": [{
+                                "domain": {
+                                    "sourceRange": {
+                                        "sources": [{
+                                            "sheetId": sheet.id,
+                                            "startRowIndex": 4,
+                                            "endRowIndex": 5,
+                                            "startColumnIndex": 9,
+                                            "endColumnIndex": 21
+                                        }]
+                                    }
+                                }
+                            }],
+                            "series": [{
+                                "series": {
+                                    "sourceRange": {
+                                        "sources": [{
+                                            "sheetId": sheet.id,
+                                            "startRowIndex": fila_general,
+                                            "endRowIndex": fila_general + 1,
+                                            "startColumnIndex": 9,
+                                            "endColumnIndex": 21
+                                        }]
+                                    }
+                                },
+                                "targetAxis": "LEFT_AXIS"
+                            }]
+                        }
+                    },
+                    "position": {
+                        "overlayPosition": {
+                            "anchorCell": {
+                                "sheetId": sheet.id,
+                                "rowIndex": chart_row_start,
+                                "columnIndex": 6
+                            },
+                            "widthPixels": 520,
+                            "heightPixels": 260
+                        }
+                    }
+                }
+            }
+        }
+    ]
+    try:
+        sheet.spreadsheet.batch_update({"requests": requests})
+    except Exception as e:
+        print(f"Nota: addChart omitido o no soportado en sandbox local: {e}")
+
+
+
 # --- Helper para analizar monto numérico de forma robusta en cualquier locale ---
 def parse_monto(monto_str):
     val_str = str(monto_str).replace("$", "").strip()

@@ -640,19 +640,20 @@ def formatear_y_totalizar(sheet, tarjeta):
     if batch_values:
         sheet.batch_update(batch_values, value_input_option="USER_ENTERED")
 
-    # Inyectar gráficos dinámicos en Google Sheets (AddChart batch_update)
+    # Inyectar gráficos dinámicos en Google Sheets (Panel lateral derecho a partir de Columna W)
     try:
-        chart_row_start = filas_total[-1] + 2
-        agregar_graficos_dashboard(sheet, filas_total, chart_row_start, tarjeta=tarjeta)
+        if tarjeta.upper() == "VISA":
+            agregar_graficos_dashboard(sheet, filas_total, tarjeta=tarjeta)
     except Exception as err_chart:
         print(f"Nota al inyectar gráficos en Sheets: {err_chart}")
 
 
-def agregar_graficos_dashboard(sheet, filas_total, chart_row_start, tarjeta="VISA"):
+def agregar_graficos_dashboard(sheet, filas_total, tarjeta="VISA"):
     """
     Inyecta mediante batch_update (addChart):
+    - Ubicación: Panel lateral derecho estático (Columna W, índice 22) para evitar cualquier superposición con las tablas.
     1. Gráfico de Torta (Share de Responsabilidad): % de deuda por usuario (Alejo vs Lu).
-    2. Gráfico de Columnas (Proyección Acumulada de Cuotas): Totales de cuotas por mes futuro.
+    2. Gráfico de Columnas (Proyección Acumulada de Cuotas por Mes).
     """
     if not filas_total or len(filas_total) < 2:
         return
@@ -662,7 +663,7 @@ def agregar_graficos_dashboard(sheet, filas_total, chart_row_start, tarjeta="VIS
     fila_general = filas_total[-1] - 1
     
     requests = [
-        # 1. Gráfico de Torta (Share por Responsable)
+        # 1. Gráfico de Torta (Share por Responsable) -> Columna W, Fila 3 (Index 22, 2)
         {
             "addChart": {
                 "chart": {
@@ -687,8 +688,8 @@ def agregar_graficos_dashboard(sheet, filas_total, chart_row_start, tarjeta="VIS
                                         "sheetId": sheet.id,
                                         "startRowIndex": start_total,
                                         "endRowIndex": end_total,
-                                        "startColumnIndex": 6,
-                                        "endColumnIndex": 7
+                                        "startColumnIndex": 4,
+                                        "endColumnIndex": 5
                                     }]
                                 }
                             }
@@ -698,17 +699,17 @@ def agregar_graficos_dashboard(sheet, filas_total, chart_row_start, tarjeta="VIS
                         "overlayPosition": {
                             "anchorCell": {
                                 "sheetId": sheet.id,
-                                "rowIndex": chart_row_start,
-                                "columnIndex": 1
+                                "rowIndex": 2,
+                                "columnIndex": 22
                             },
-                            "widthPixels": 420,
-                            "heightPixels": 260
+                            "widthPixels": 480,
+                            "heightPixels": 290
                         }
                     }
                 }
             }
         },
-        # 2. Gráfico de Barras (Proyección Acumulada de Cuotas a Futuro)
+        # 2. Gráfico de Barras (Proyección Acumulada de Cuotas a Futuro) -> Columna W, Fila 18 (Index 22, 17)
         {
             "addChart": {
                 "chart": {
@@ -750,11 +751,11 @@ def agregar_graficos_dashboard(sheet, filas_total, chart_row_start, tarjeta="VIS
                         "overlayPosition": {
                             "anchorCell": {
                                 "sheetId": sheet.id,
-                                "rowIndex": chart_row_start,
-                                "columnIndex": 7
+                                "rowIndex": 17,
+                                "columnIndex": 22
                             },
-                            "widthPixels": 520,
-                            "heightPixels": 260
+                            "widthPixels": 580,
+                            "heightPixels": 310
                         }
                     }
                 }
@@ -765,6 +766,7 @@ def agregar_graficos_dashboard(sheet, filas_total, chart_row_start, tarjeta="VIS
         sheet.spreadsheet.batch_update({"requests": requests})
     except Exception as e:
         print(f"Nota: addChart omitido o no soportado en sandbox local: {e}")
+
 
 
 

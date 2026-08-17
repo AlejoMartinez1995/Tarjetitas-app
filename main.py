@@ -621,6 +621,10 @@ def formatear_y_totalizar(sheet, tarjeta):
                 formula = 0.0
             batch_values.append({"range": f"{letra}{fila_t}", "values": [[formula]]})
 
+        # FÓRMULA DEL TOTAL ACUMULADO DEL RESPONSABLE EN COLUMNA E (TOTAL) PARA EL GRÁFICO DE TORTA
+        formula_sum_persona = f"=SUM(J{fila_t}:U{fila_t})"
+        batch_values.append({"range": f"E{fila_t}", "values": [[formula_sum_persona]]})
+
     # Escribir fórmula SUM para la fila final de total general
     fila_general = filas_total[-1]
     if len(filas_total) > 1:
@@ -631,11 +635,15 @@ def formatear_y_totalizar(sheet, tarjeta):
             # =SUM(letra_totales_inicio:letra_totales_fin)
             formula = f"=SUM({letra}{fila_totales_inicio}:{letra}{fila_totales_fin})"
             batch_values.append({"range": f"{letra}{fila_general}", "values": [[formula]]})
+        
+        formula_sum_general = f"=SUM(J{fila_general}:U{fila_general})"
+        batch_values.append({"range": f"E{fila_general}", "values": [[formula_sum_general]]})
     else:
         # Solo hay una fila de total general y no hay gastos ni otros totales. Escribir 0.0
         for col_idx in range(10, 22):
             letra = chr(64 + col_idx)
             batch_values.append({"range": f"{letra}{fila_general}", "values": [[0.0]]})
+        batch_values.append({"range": f"E{fila_general}", "values": [[0.0]]})
 
     if batch_values:
         sheet.batch_update(batch_values, value_input_option="USER_ENTERED")
@@ -647,6 +655,7 @@ def formatear_y_totalizar(sheet, tarjeta):
             agregar_graficos_dashboard(sheet, filas_total, chart_row_start, tarjeta=tarjeta)
     except Exception as err_chart:
         print(f"Nota al inyectar gráficos en Sheets: {err_chart}")
+
 
 
 def agregar_graficos_dashboard(sheet, filas_total, chart_row_start=16, tarjeta="MASTERCARD"):
@@ -1103,8 +1112,10 @@ def reestructurar_hoja_completa_desde_db(sheet, año, db_gastos):
         nuevas_filas.append(["", "", "", f"TOTAL {nombre.upper()}"] + [""] * 17)
     nuevas_filas.append(["", "", "", "TOTAL VISA"] + [""] * 17)
     
-    # Separador
+    # Separador amplio entre VISA y MASTERCARD
     nuevas_filas.append([""] * 21)
+    nuevas_filas.append([""] * 21)
+
     
     # --- Reconstruir MASTERCARD ---
     nuevas_filas.append(["MASTERCARD"] + [""] * 20)

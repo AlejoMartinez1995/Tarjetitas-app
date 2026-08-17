@@ -714,8 +714,8 @@ def agregar_graficos_dashboard(sheet, data_start, data_end, filas_total, chart_r
     """
     Inyecta mediante batch_update (addChart):
     - Ubicación: Debajo de la tabla correspondiente (VISA o MASTERCARD), entre Columnas B e I.
-    1. Gráfico de Dona / Torta Dark Mode (Share de Responsabilidad): % de deuda por usuario (Alejo vs Lu).
-    2. Gráfico de Columnas Dark Mode (Proyección Acumulada de Cuotas por Mes en tono Violeta/Coral).
+    1. Gráfico de Dona Dark Mode (Share de Responsabilidad): % de deuda por usuario con etiquetas externas legibles.
+    2. Gráfico de Columnas Dark Mode (Proyección Acumulada de Cuotas con ejes y montos en blanco en negrita).
     """
     if not filas_total or len(filas_total) < 2:
         return
@@ -728,6 +728,9 @@ def agregar_graficos_dashboard(sheet, data_start, data_end, filas_total, chart_r
     end_total = filas_total[-2]
     fila_general = filas_total[-1] - 1
     
+    white_text = {"red": 1, "green": 1, "blue": 1}
+    navy_bg = {"red": 0.08, "green": 0.17, "blue": 0.24}
+
     requests = [
         # 1. Gráfico de Dona Dark Mode (Share por Responsable) -> Columna B (Index 1), Fila chart_row_start
         {
@@ -736,16 +739,16 @@ def agregar_graficos_dashboard(sheet, data_start, data_end, filas_total, chart_r
                     "spec": {
                         "title": f"🍕 Share por Responsable ({tarjeta})",
                         "titleTextFormat": {
-                            "foregroundColorStyle": {"rgbColor": {"red": 1, "green": 1, "blue": 1}},
+                            "foregroundColorStyle": {"rgbColor": white_text},
                             "bold": True,
                             "fontSize": 12
                         },
                         "backgroundColorStyle": {
-                            "rgbColor": {"red": 0.08, "green": 0.17, "blue": 0.24}
+                            "rgbColor": navy_bg
                         },
-
+                        "fontName": "Roboto",
                         "pieChart": {
-                            "legendPosition": "RIGHT_LEGEND",
+                            "legendPosition": "LABELED_LEGEND",
                             "pieHole": 0.55,
                             "domain": {
                                 "sourceRange": {
@@ -792,17 +795,33 @@ def agregar_graficos_dashboard(sheet, data_start, data_end, filas_total, chart_r
                     "spec": {
                         "title": f"📊 Proyección Acumulada de Cuotas por Mes ({tarjeta})",
                         "titleTextFormat": {
-                            "foregroundColorStyle": {"rgbColor": {"red": 1, "green": 1, "blue": 1}},
+                            "foregroundColorStyle": {"rgbColor": white_text},
                             "bold": True,
                             "fontSize": 12
                         },
                         "backgroundColorStyle": {
-                            "rgbColor": {"red": 0.08, "green": 0.17, "blue": 0.24}
+                            "rgbColor": navy_bg
                         },
-
+                        "fontName": "Roboto",
                         "basicChart": {
                             "chartType": "COLUMN",
                             "legendPosition": "NO_LEGEND",
+                            "axis": [
+                                {
+                                    "position": "BOTTOM_AXIS",
+                                    "format": {
+                                        "foregroundColorStyle": {"rgbColor": white_text},
+                                        "bold": True
+                                    }
+                                },
+                                {
+                                    "position": "LEFT_AXIS",
+                                    "format": {
+                                        "foregroundColorStyle": {"rgbColor": white_text},
+                                        "bold": True
+                                    }
+                                }
+                            ],
                             "domains": [{
                                 "domain": {
                                     "sourceRange": {
@@ -831,6 +850,13 @@ def agregar_graficos_dashboard(sheet, data_start, data_end, filas_total, chart_r
                                 "targetAxis": "LEFT_AXIS",
                                 "colorStyle": {
                                     "rgbColor": {"red": 0.48, "green": 0.51, "blue": 0.99}
+                                },
+                                "dataLabel": {
+                                    "type": "DATA",
+                                    "textFormat": {
+                                        "foregroundColorStyle": {"rgbColor": white_text},
+                                        "bold": True
+                                    }
                                 }
                             }]
                         }
@@ -850,6 +876,7 @@ def agregar_graficos_dashboard(sheet, data_start, data_end, filas_total, chart_r
             }
         }
     ]
+
 
     try:
         sheet.spreadsheet.batch_update({"requests": requests})

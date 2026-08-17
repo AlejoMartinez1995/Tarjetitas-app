@@ -749,8 +749,10 @@ def agregar_graficos_dashboard(sheet, data_start, data_end, filas_total, chart_r
                         "fontName": "Roboto",
                         "pieChart": {
                             "legendPosition": "LABELED_LEGEND",
-                            "pieHole": 0.55,
+                            "pieHole": 0.45,
+                            "threeDimensional": True,
                             "domain": {
+
                                 "sourceRange": {
                                     "sources": [{
                                         "sheetId": sheet.id,
@@ -781,8 +783,8 @@ def agregar_graficos_dashboard(sheet, data_start, data_end, filas_total, chart_r
                                 "rowIndex": chart_row_start,
                                 "columnIndex": 1
                             },
-                            "widthPixels": 420,
-                            "heightPixels": 270
+                            "widthPixels": 460,
+                            "heightPixels": 300
                         }
                     }
                 }
@@ -811,14 +813,16 @@ def agregar_graficos_dashboard(sheet, data_start, data_end, filas_total, chart_r
                                     "position": "BOTTOM_AXIS",
                                     "format": {
                                         "foregroundColorStyle": {"rgbColor": white_text},
-                                        "bold": True
+                                        "bold": True,
+                                        "fontSize": 11
                                     }
                                 },
                                 {
                                     "position": "LEFT_AXIS",
                                     "format": {
                                         "foregroundColorStyle": {"rgbColor": white_text},
-                                        "bold": True
+                                        "bold": True,
+                                        "fontSize": 11
                                     }
                                 }
                             ],
@@ -853,9 +857,11 @@ def agregar_graficos_dashboard(sheet, data_start, data_end, filas_total, chart_r
                                 },
                                 "dataLabel": {
                                     "type": "DATA",
+                                    "placement": "INSIDE_BASE",
                                     "textFormat": {
                                         "foregroundColorStyle": {"rgbColor": white_text},
-                                        "bold": True
+                                        "bold": True,
+                                        "fontSize": 10
                                     }
                                 }
                             }]
@@ -868,14 +874,15 @@ def agregar_graficos_dashboard(sheet, data_start, data_end, filas_total, chart_r
                                 "rowIndex": chart_row_start,
                                 "columnIndex": 8
                             },
-                            "widthPixels": 520,
-                            "heightPixels": 270
+                            "widthPixels": 580,
+                            "heightPixels": 300
                         }
                     }
                 }
             }
         }
     ]
+
 
 
     try:

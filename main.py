@@ -640,8 +640,15 @@ def formatear_y_totalizar(sheet, tarjeta):
     if batch_values:
         sheet.batch_update(batch_values, value_input_option="USER_ENTERED")
 
+    # Inyectar gráficos dinámicos en Google Sheets (AddChart batch_update)
+    try:
+        chart_row_start = filas_total[-1] + 2
+        agregar_graficos_dashboard(sheet, filas_total, chart_row_start, tarjeta=tarjeta)
+    except Exception as err_chart:
+        print(f"Nota al inyectar gráficos en Sheets: {err_chart}")
 
-def agregar_graficos_dashboard(sheet, filas_total, chart_row_start):
+
+def agregar_graficos_dashboard(sheet, filas_total, chart_row_start, tarjeta="VISA"):
     """
     Inyecta mediante batch_update (addChart):
     1. Gráfico de Torta (Share de Responsabilidad): % de deuda por usuario (Alejo vs Lu).
@@ -660,7 +667,7 @@ def agregar_graficos_dashboard(sheet, filas_total, chart_row_start):
             "addChart": {
                 "chart": {
                     "spec": {
-                        "title": "Share de Gastos por Responsable (VISA)",
+                        "title": f"Share de Gastos por Responsable ({tarjeta})",
                         "pieChart": {
                             "legendPosition": "RIGHT_LEGEND",
                             "domain": {
@@ -680,8 +687,8 @@ def agregar_graficos_dashboard(sheet, filas_total, chart_row_start):
                                         "sheetId": sheet.id,
                                         "startRowIndex": start_total,
                                         "endRowIndex": end_total,
-                                        "startColumnIndex": 9,
-                                        "endColumnIndex": 10
+                                        "startColumnIndex": 6,
+                                        "endColumnIndex": 7
                                     }]
                                 }
                             }
@@ -706,7 +713,7 @@ def agregar_graficos_dashboard(sheet, filas_total, chart_row_start):
             "addChart": {
                 "chart": {
                     "spec": {
-                        "title": "Proyección Acumulada de Cuotas por Mes",
+                        "title": f"Proyección Acumulada de Cuotas por Mes ({tarjeta})",
                         "basicChart": {
                             "chartType": "COLUMN",
                             "legendPosition": "NO_LEGEND",
@@ -715,8 +722,8 @@ def agregar_graficos_dashboard(sheet, filas_total, chart_row_start):
                                     "sourceRange": {
                                         "sources": [{
                                             "sheetId": sheet.id,
-                                            "startRowIndex": 4,
-                                            "endRowIndex": 5,
+                                            "startRowIndex": 1,
+                                            "endRowIndex": 2,
                                             "startColumnIndex": 9,
                                             "endColumnIndex": 21
                                         }]
@@ -744,7 +751,7 @@ def agregar_graficos_dashboard(sheet, filas_total, chart_row_start):
                             "anchorCell": {
                                 "sheetId": sheet.id,
                                 "rowIndex": chart_row_start,
-                                "columnIndex": 6
+                                "columnIndex": 7
                             },
                             "widthPixels": 520,
                             "heightPixels": 260
@@ -758,6 +765,7 @@ def agregar_graficos_dashboard(sheet, filas_total, chart_row_start):
         sheet.spreadsheet.batch_update({"requests": requests})
     except Exception as e:
         print(f"Nota: addChart omitido o no soportado en sandbox local: {e}")
+
 
 
 

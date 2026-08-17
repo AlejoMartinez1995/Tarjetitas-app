@@ -621,9 +621,11 @@ def formatear_y_totalizar(sheet, tarjeta):
                 formula = 0.0
             batch_values.append({"range": f"{letra}{fila_t}", "values": [[formula]]})
 
-        # FÓRMULA DEL TOTAL ACUMULADO DEL RESPONSABLE EN COLUMNA E (TOTAL) PARA EL GRÁFICO DE TORTA
+
+        # FÓRMULA DEL TOTAL ACUMULADO DEL RESPONSABLE EN COLUMNA G (TOTAL) PARA EL GRÁFICO DE TORTA
         formula_sum_persona = f"=SUM(J{fila_t}:U{fila_t})"
-        batch_values.append({"range": f"E{fila_t}", "values": [[formula_sum_persona]]})
+        batch_values.append({"range": f"G{fila_t}", "values": [[formula_sum_persona]]})
+
 
     # Escribir fórmula SUM para la fila final de total general
     fila_general = filas_total[-1]
@@ -637,31 +639,30 @@ def formatear_y_totalizar(sheet, tarjeta):
             batch_values.append({"range": f"{letra}{fila_general}", "values": [[formula]]})
         
         formula_sum_general = f"=SUM(J{fila_general}:U{fila_general})"
-        batch_values.append({"range": f"E{fila_general}", "values": [[formula_sum_general]]})
+        batch_values.append({"range": f"G{fila_general}", "values": [[formula_sum_general]]})
     else:
         # Solo hay una fila de total general y no hay gastos ni otros totales. Escribir 0.0
         for col_idx in range(10, 22):
             letra = chr(64 + col_idx)
             batch_values.append({"range": f"{letra}{fila_general}", "values": [[0.0]]})
-        batch_values.append({"range": f"E{fila_general}", "values": [[0.0]]})
+        batch_values.append({"range": f"G{fila_general}", "values": [[0.0]]})
 
     if batch_values:
         sheet.batch_update(batch_values, value_input_option="USER_ENTERED")
 
-    # Inyectar gráficos dinámicos en Google Sheets (Debajo del bloque MASTERCARD, visibles en pantalla)
+    # Inyectar gráficos dinámicos en Google Sheets (Debajo del bloque MASTERCARD a partir de la Fila 20+)
     try:
         if tarjeta.upper() == "MASTERCARD":
-            chart_row_start = filas_total[-1] + 2  # 3 filas debajo de TOTAL MASTERCARD (0-indexed)
+            chart_row_start = filas_total[-1] + 2  # Se ubica 3 filas debajo de TOTAL MASTERCARD (0-indexed)
             agregar_graficos_dashboard(sheet, filas_total, chart_row_start, tarjeta=tarjeta)
     except Exception as err_chart:
         print(f"Nota al inyectar gráficos en Sheets: {err_chart}")
 
 
-
-def agregar_graficos_dashboard(sheet, filas_total, chart_row_start=16, tarjeta="MASTERCARD"):
+def agregar_graficos_dashboard(sheet, filas_total, chart_row_start=19, tarjeta="MASTERCARD"):
     """
     Inyecta mediante batch_update (addChart):
-    - Ubicación: Debajo de las tablas de tarjetas (Filas 17+), visible entre Columnas B e I sin necesidad de scroll horizontal.
+    - Ubicación: Debajo de las tablas de tarjetas (Filas 20+), visible entre Columnas B e I sin superponerse.
     1. Gráfico de Torta (Share de Responsabilidad): % de deuda por usuario (Alejo vs Lu).
     2. Gráfico de Columnas (Proyección Acumulada de Cuotas por Mes).
     """
@@ -689,6 +690,7 @@ def agregar_graficos_dashboard(sheet, filas_total, chart_row_start=16, tarjeta="
                                         "endRowIndex": end_total,
                                         "startColumnIndex": 3,
                                         "endColumnIndex": 4
+
                                     }]
                                 }
                             },
@@ -698,8 +700,8 @@ def agregar_graficos_dashboard(sheet, filas_total, chart_row_start=16, tarjeta="
                                         "sheetId": sheet.id,
                                         "startRowIndex": start_total,
                                         "endRowIndex": end_total,
-                                        "startColumnIndex": 4,
-                                        "endColumnIndex": 5
+                                        "startColumnIndex": 6,
+                                        "endColumnIndex": 7
                                     }]
                                 }
                             }
@@ -776,6 +778,7 @@ def agregar_graficos_dashboard(sheet, filas_total, chart_row_start=16, tarjeta="
         sheet.spreadsheet.batch_update({"requests": requests})
     except Exception as e:
         print(f"Nota: addChart omitido o no soportado en sandbox local: {e}")
+
 
 
 

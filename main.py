@@ -211,9 +211,12 @@ def formatear_y_totalizar(sheet, tarjeta):
     fila_ultima_total = filas_total[-1]
 
     requests = []
+    # DEFINICIÓN DE COLOR DE FONDO Y TEXTO UNIFICADO (#142b3d y Blanco #FFFFFF)
+    COLOR_TABLA_BG = {"red": 0.0784, "green": 0.1686, "blue": 0.2392}  # #142b3d
+    COLOR_TEXTO_BLANCO = {"red": 1.0, "green": 1.0, "blue": 1.0}        # #FFFFFF
+
 
     # 1. TÍTULO GENERAL DE LA HOJA (Fila 1 -> Index 0)
-    # Fondo Azul Marino Oscuro, texto Blanco bold centrado, combinar de A1 a U1
     requests.append(
         {
             "repeatCell": {
@@ -226,12 +229,12 @@ def formatear_y_totalizar(sheet, tarjeta):
                 },
                 "cell": {
                     "userEnteredFormat": {
-                        "backgroundColor": {"red": 0.08, "green": 0.17, "blue": 0.24},
+                        "backgroundColor": COLOR_TABLA_BG,
                         "horizontalAlignment": "CENTER",
                         "textFormat": {
                             "fontSize": 12,
                             "bold": True,
-                            "foregroundColor": {"red": 1, "green": 1, "blue": 1},
+                            "foregroundColor": COLOR_TEXTO_BLANCO,
                         },
                     }
                 },
@@ -255,7 +258,6 @@ def formatear_y_totalizar(sheet, tarjeta):
     )
 
     # 2. CABECERA DE LAS COLUMNAS (Fila 2 -> Index 1)
-    # Fondo Azul Pizarra, texto Blanco bold centrado, bordes inferiores gruesos
     requests.append(
         {
             "repeatCell": {
@@ -268,12 +270,12 @@ def formatear_y_totalizar(sheet, tarjeta):
                 },
                 "cell": {
                     "userEnteredFormat": {
-                        "backgroundColor": {"red": 0.18, "green": 0.30, "blue": 0.41},
+                        "backgroundColor": COLOR_TABLA_BG,
                         "horizontalAlignment": "CENTER",
                         "textFormat": {
                             "fontSize": 10,
                             "bold": True,
-                            "foregroundColor": {"red": 1, "green": 1, "blue": 1},
+                            "foregroundColor": COLOR_TEXTO_BLANCO,
                         },
                         "borders": {
                             "bottom": {"style": "SOLID_MEDIUM"},
@@ -318,7 +320,6 @@ def formatear_y_totalizar(sheet, tarjeta):
     )
 
     # 3. BANNER DE LA TARJETA (VISA o MASTERCARD -> Index inicio_bloque - 2)
-    # Fondo Gris/Celeste suave, texto Azul Marino bold centrado, combinar de A a U
     idx_banner = data_start - 2
     requests.append(
         {
@@ -332,12 +333,12 @@ def formatear_y_totalizar(sheet, tarjeta):
                 },
                 "cell": {
                     "userEnteredFormat": {
-                        "backgroundColor": {"red": 0.88, "green": 0.92, "blue": 0.94},
+                        "backgroundColor": COLOR_TABLA_BG,
                         "horizontalAlignment": "CENTER",
                         "textFormat": {
                             "fontSize": 11,
                             "bold": True,
-                            "foregroundColor": {"red": 0.08, "green": 0.17, "blue": 0.24},
+                            "foregroundColor": COLOR_TEXTO_BLANCO,
                         },
                         "borders": {
                             "top": {"style": "SOLID"},
@@ -436,7 +437,7 @@ def formatear_y_totalizar(sheet, tarjeta):
         fila_str = " ".join(row_data).upper()
 
         if "TOTAL" in fila_str:
-            # FILA DE TOTAL: Limpiar toda la fila (quitar bordes y pintar del azul profundo de fondo)
+            # FILA DE TOTAL: Fondo #142b3d y texto Blanco Bold
             requests.append(
                 {
                     "repeatCell": {
@@ -449,7 +450,7 @@ def formatear_y_totalizar(sheet, tarjeta):
                         },
                         "cell": {
                             "userEnteredFormat": {
-                                "backgroundColor": {"red": 0.08, "green": 0.17, "blue": 0.24},  # Azul profundo
+                                "backgroundColor": COLOR_TABLA_BG,
                                 "borders": {
                                     "top": {"style": "NONE"},
                                     "bottom": {"style": "NONE"},
@@ -463,12 +464,10 @@ def formatear_y_totalizar(sheet, tarjeta):
                 }
             )
 
-            # Aplicar formato sólo a Columna D (Label) y Columnas J a U (Valores)
-            color_total = {"red": 0.85, "green": 0.88, "blue": 0.92} # Azul Pizarra Suave Medio
             estilo_borde_inf = "DOUBLE" if tarjeta.upper() in fila_str else "SOLID"
             text_format_total = {
                 "bold": True,
-                "foregroundColor": {"red": 0.08, "green": 0.17, "blue": 0.24} # Azul Marino Grafito
+                "foregroundColor": COLOR_TEXTO_BLANCO
             }
             
             # Formatear Columna D (Responsable - index 3 a 5 debido al merge)
@@ -484,7 +483,7 @@ def formatear_y_totalizar(sheet, tarjeta):
                         },
                         "cell": {
                             "userEnteredFormat": {
-                                "backgroundColor": color_total,
+                                "backgroundColor": COLOR_TABLA_BG,
                                 "horizontalAlignment": "CENTER",
                                 "textFormat": text_format_total,
                                 "borders": {
@@ -513,7 +512,7 @@ def formatear_y_totalizar(sheet, tarjeta):
                         },
                         "cell": {
                             "userEnteredFormat": {
-                                "backgroundColor": color_total,
+                                "backgroundColor": COLOR_TABLA_BG,
                                 "horizontalAlignment": "CENTER",
                                 "textFormat": text_format_total,
                                 "numberFormat": {"type": "CURRENCY", "pattern": '"$" #,##0.00'},
@@ -531,7 +530,6 @@ def formatear_y_totalizar(sheet, tarjeta):
             )
 
             # Formatear Columnas J a U (Meses - index 9 a 21)
-
             requests.append(
                 {
                     "repeatCell": {
@@ -544,7 +542,7 @@ def formatear_y_totalizar(sheet, tarjeta):
                         },
                         "cell": {
                             "userEnteredFormat": {
-                                "backgroundColor": color_total,
+                                "backgroundColor": COLOR_TABLA_BG,
                                 "horizontalAlignment": "CENTER",
                                 "textFormat": text_format_total,
                                 "borders": {
@@ -560,17 +558,7 @@ def formatear_y_totalizar(sheet, tarjeta):
                 }
             )
         else:
-            # FILA DE GASTOS: Borde sólido y color pastel desaturado de la paleta unificada
-            color = {"red": 1, "green": 1, "blue": 1}
-            if responsable.strip():
-                h = sum(ord(c) for c in responsable.lower()) % 3
-                if h == 0:
-                    color = {"red": 0.92, "green": 0.945, "blue": 0.96} # Azul Pizarra Muy Suave
-                elif h == 1:
-                    color = {"red": 0.93, "green": 0.96, "blue": 0.95} # Verde Pizarra Muy Suave
-                else:
-                    color = {"red": 0.97, "green": 0.955, "blue": 0.92} # Gris Cálido Suave
-
+            # FILA DE GASTOS: Fondo #142b3d y texto Blanco #FFFFFF
             requests.append(
                 {
                     "repeatCell": {
@@ -583,12 +571,12 @@ def formatear_y_totalizar(sheet, tarjeta):
                         },
                         "cell": {
                             "userEnteredFormat": {
-                                "backgroundColor": color,
+                                "backgroundColor": COLOR_TABLA_BG,
                                 "horizontalAlignment": "CENTER",
                                 "textFormat": {
                                     "fontSize": 9,
                                     "bold": False,
-                                    "foregroundColor": {"red": 0.08, "green": 0.17, "blue": 0.24},
+                                    "foregroundColor": COLOR_TEXTO_BLANCO,
                                 },
                                 "borders": {
                                     "top": {"style": "SOLID"},
@@ -599,10 +587,10 @@ def formatear_y_totalizar(sheet, tarjeta):
                             }
                         },
                         "fields": "userEnteredFormat(backgroundColor,horizontalAlignment,textFormat,borders)",
-
                     }
                 }
             )
+
 
         if "TOTAL" not in fila_str:
             # Combinar B con C
@@ -741,8 +729,9 @@ def agregar_graficos_dashboard(sheet, data_start, data_end, filas_total, chart_r
                             "fontSize": 12
                         },
                         "backgroundColorStyle": {
-                            "rgbColor": {"red": 0.09, "green": 0.10, "blue": 0.14}
+                            "rgbColor": {"red": 0.0784, "green": 0.1686, "blue": 0.2392}
                         },
+
                         "pieChart": {
                             "legendPosition": "RIGHT_LEGEND",
                             "pieHole": 0.55,
@@ -796,8 +785,9 @@ def agregar_graficos_dashboard(sheet, data_start, data_end, filas_total, chart_r
                             "fontSize": 12
                         },
                         "backgroundColorStyle": {
-                            "rgbColor": {"red": 0.09, "green": 0.10, "blue": 0.14}
+                            "rgbColor": {"red": 0.0784, "green": 0.1686, "blue": 0.2392}
                         },
+
                         "basicChart": {
                             "chartType": "COLUMN",
                             "legendPosition": "NO_LEGEND",
